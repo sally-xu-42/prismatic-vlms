@@ -187,6 +187,8 @@ class TrainingStrategy(ABC):
                             multimodal_indices=batch["multimodal_indices"],
                         )
                         loss = output.loss
+                        # print(f"Input IDs: {batch['input_ids']}, Labels: {batch['labels']}")
+                        # break
 
                     # Commit Loss (Prior to Gradient Accumulation Normalization)
                     metrics.commit(loss=loss)
@@ -221,6 +223,10 @@ class TrainingStrategy(ABC):
                         # Push Metrics
                         metrics.commit(global_step=metrics.global_step + 1, lr=self.lr_scheduler.get_last_lr()[0])
                         status = metrics.push()
+
+                        # Add checkpoint saving every 500 steps
+                        if metrics.global_step % 500 == 0:
+                            self.save_checkpoint(metrics.run_dir, metrics.global_step, epoch, loss.item())
 
                         # Check for Termination & Save Final Checkpoint (in case `max_steps` is not None)
                         if self.max_steps is not None and metrics.global_step >= self.max_steps:

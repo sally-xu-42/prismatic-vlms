@@ -110,6 +110,24 @@ class LLaVa_LVIS4V_LRV_Config(DatasetConfig):
     dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
 
 
+# CLEVR
+@dataclass
+class CLEVRConfig(DatasetConfig):
+    dataset_id: str = "clevr"
+
+    # Preprocessed CLEVR dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/simple_clevr_train_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
+    )
+    # We don't use finetune stage for CLEVR
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/CLEVR_v1.0/questions/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+
 # === Define a Dataset Registry Enum for Reference & Validation =>> all *new* datasets must be added here! ===
 @unique
 class DatasetRegistry(Enum):
@@ -122,6 +140,8 @@ class DatasetRegistry(Enum):
     LLAVA_LRV = LLaVa_LRV_Config
 
     LLAVA_LVIS4V_LRV = LLaVa_LVIS4V_LRV_Config
+
+    CLEVR = CLEVRConfig
 
     @property
     def dataset_id(self) -> str:

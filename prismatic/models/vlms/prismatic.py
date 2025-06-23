@@ -464,6 +464,7 @@ class PrismaticVLM(VLM):
         pixel_values: Union[torch.Tensor, Dict[str, torch.Tensor]],
         texts: List[str],
         return_string_probabilities: Optional[List[str]] = None,
+        input_ids: Optional[torch.Tensor]=None,
         **kwargs: str,
     ) -> Union[List[str], List[List[float]]]:
         # For now, only support generation with a batch size of 1 for simplicity
@@ -473,10 +474,14 @@ class PrismaticVLM(VLM):
         batch_input_ids = [
             tokenizer(text, truncation=True, return_tensors="pt").input_ids.to(self.device) for text in texts
         ]
+
+        print(f"[Debug] batch_input_ids = {[ids.shape for ids in batch_input_ids]}")
+        print(f"[Debug] input_ids = {[ids[0, :].cpu().numpy().tolist() for ids in batch_input_ids]}")
         if isinstance(pixel_values, torch.Tensor):
             pixel_values = pixel_values[None, ...].to(self.device)
         elif isinstance(pixel_values, dict):
-            pixel_values = {k: v[None, ...].to(self.device) for k, v in pixel_values.items()}
+            # pixel_values = {k: v[None, ...].to(self.device) for k, v in pixel_values.items()}
+            pixel_values = {k: v[...].to(self.device) for k, v in pixel_values.items()}
         else:
             raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
 
@@ -488,15 +493,18 @@ class PrismaticVLM(VLM):
         with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
             for idx, input_ids in enumerate(batch_input_ids):
                 if isinstance(pixel_values, torch.Tensor):
-                    pixel_values = pixel_values[idx]
+                    current_pixel_values = pixel_values[idx] # Shape: [3, 384, 384]
                 elif isinstance(pixel_values, dict):
-                    pixel_values = {k: pixel_values[k][idx] for k in pixel_values}
+                    # current_pixel_values = {k: pixel_values[k][idx] for k in pixel_values} # Shape: Dict[str, [3, 384, 384]]
+                    current_pixel_values = {k: v[idx:idx+1] for k, v in pixel_values.items()} # Shape: Dict[str, [1, 3, 384, 384]]
+                    dino_shape = current_pixel_values["dino"].shape
+                    # print(f"[Debug] current_pixel_values = {dino_shape}")
                 else:
                     raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
 
                 # Handle `return_string_probabilities`
                 if return_string_probabilities is None:
-                    full_out_ids = super().generate(input_ids=input_ids, pixel_values=pixel_values, **kwargs)
+                    full_out_ids = super().generate(input_ids=input_ids, pixel_values=current_pixel_values, **kwargs)
                     gen_ids = full_out_ids[0, input_ids.shape[1] :]
 
                     # Decode `gen_ids` and strip any <EOS> tokens
@@ -538,6 +546,7 @@ class PrismaticVLM(VLM):
 
         # Prepare Inputs
         input_ids = tokenizer(prompt_text, truncation=True, return_tensors="pt").input_ids.to(self.device)
+        # print(f"[Debug] input_ids = {input_ids[0, :].cpu().numpy().tolist()}")
         pixel_values = image_transform(image)
         if isinstance(pixel_values, torch.Tensor):
             pixel_values = pixel_values[None, ...].to(self.device)

@@ -1,24 +1,8 @@
 """
-pretrain.py
+resumable_pretrain.py
 
-Pretraining script for Prismatic VLM pretraining in native PyTorch, using Fully-Sharded Data Parallel (FSDP) to run
-distributed training across GPUs. By default, assumes that CUDA toolkit is >= 11.0 (to support BF16 mixed precision).
-
-
-Notes & Prerequisites:
-    - We're loading LLaMa-2 (and possibly other) gated models from HuggingFace (HF Hub); these require an auth_token.
-      For LLaMa-2, make sure to first get Meta approval, then fill out the form at the top of the HF LLaMa-2 page:
-        => Link: https://huggingface.co/meta-llama/Llama-2-7b-chat-hf
-        => Generate Token (from `huggingface.co`): Settings / Access Tokens / New "Read" Token
-        => Set `cfg.hf_token` to file path with token (as single line text file) or environment variable name
-
-    - If you want to set a custom location for all HF / TIMM artifacts --> `export HF_HOME="<PATH>"` *before* running!
-        => For example (add to end of .bashrc): `export HF_HOME="/mnt/fsx/skaramcheti/cache"`
-
-Run with:
-    - [Single Node One-GPU (Debug)] : torchrun --standalone --nnodes 1 --nproc-per-node 1 scripts/pretrain.py
-    - [Single Node Multi-GPU (= $K)]: torchrun --standalone --nnodes 1 --nproc-per-node $K scripts/pretrain.py
-    - [Multi-Node/AWS Sagemaker] Depends on your individual setup; file an issue if you have trouble!
+Modified version of pretrain.py with true resumption capability.
+Saves and loads training state including epoch, step, and dataset position.
 """
 
 import json
@@ -47,7 +31,7 @@ overwatch = initialize_overwatch(__name__)
 
 
 @dataclass
-class PretrainConfig:
+class ResumablePretrainConfig:
     # fmt: off
 
     # ModelConfig (`prismatic/conf/models.py`); override with --model.type `ModelRegistry.<MODEL>.model_id`
@@ -61,11 +45,8 @@ class PretrainConfig:
     )
 
     # Pretraining Stage in < align (projector-only) | finetune (projector + LLM) | full-finetune (all) >
-    # ---
-    stage: str = "finetune"                                         # Pretraining Stage in < align | finetune >
-    pretrained_checkpoint: Optional[Path] = None                    # Pretrained Checkpoint to Load (for `finetune`)
-                                                                    #   if None =>> will match on (run_dir / `align`)
-
+    stage: str = "align"                                            # Pretraining Stage
+    
     # Run Arguments
     run_id: Optional[str] = None                                    # Run ID for logging, Weights & Biases
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
@@ -75,14 +56,14 @@ class PretrainConfig:
     hf_token: Union[str, Path] = Path(".hf_token")                  # Environment variable or Path to HF Token
 
     # Tracking Parameters
-    trackers: Tuple[str, ...] = ("wandb",)                  # Trackers to initialize (if W&B, add config!)
-    # wandb_project: str = "prismatic"                                # Name of W&B project (default: `prismatic`)
-    # wandb_entity: Optional[str] = None                              # Name of W&B entity (default: None)
+    trackers: Tuple[str, ...] = ("wandb",)                          # Trackers to initialize
     wandb_project: str = "prismatic-vlms"
     wandb_entity: str = "sallyxu"
 
+    resume_from_checkpoint: Optional[Path] = None                   # Checkpoint to resume from (full state)
+
     def __post_init__(self) -> None:
-        """Set optimization parameters based on `stage` in {"align", "finetune"}."""
+        """Set optimization parameters based on `stage`."""
         if self.stage == "align":
             self.epochs = self.model.align_epochs
             self.max_steps = self.model.align_max_steps
@@ -114,50 +95,115 @@ class PretrainConfig:
         else:
             raise ValueError(f"Stage `{self.stage}` is not supported!")
 
-    # fmt: on
+
+class ResumableDataset:
+    """Wrapper around dataset that can skip to a specific sample index."""
+    
+    def __init__(self, dataset, start_index=0):
+        self.dataset = dataset
+        self.start_index = start_index
+        self.current_index = start_index
+    
+    def __len__(self):
+        return len(self.dataset) - self.start_index
+    
+    def __getitem__(self, idx):
+        actual_idx = (self.start_index + idx) % len(self.dataset)
+        return self.dataset[actual_idx]
+    
+    def get_state(self):
+        return {"current_index": self.current_index, "start_index": self.start_index}
+    
+    def load_state(self, state):
+        self.current_index = state["current_index"]
+        self.start_index = state["start_index"]
+
+
+def save_checkpoint(checkpoint_path, model, optimizer, scheduler, epoch, step, samples_seen, dataset_state=None):
+    """Save full training state including model, optimizer, and training progress."""
+    checkpoint = {
+        "model": {key: getattr(model, key).state_dict() for key in model.trainable_module_keys},
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict() if scheduler else None,
+        "epoch": epoch,
+        "step": step,
+        "samples_seen": samples_seen,
+        "dataset_state": dataset_state,
+        "rng_state": torch.get_rng_state(),
+    }
+    torch.save(checkpoint, checkpoint_path)
+    overwatch.info(f"Saved checkpoint to {checkpoint_path}")
+
+
+def load_checkpoint(checkpoint_path, model, optimizer, scheduler):
+    """Load full training state."""
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    
+    # Load model weights
+    for key in model.trainable_module_keys:
+        if key in checkpoint["model"]:
+            getattr(model, key).load_state_dict(checkpoint["model"][key])
+    
+    # Load optimizer and scheduler
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    if scheduler and checkpoint["scheduler"]:
+        scheduler.load_state_dict(checkpoint["scheduler"])
+    
+    # Restore RNG state
+    torch.set_rng_state(checkpoint["rng_state"])
+    
+    return {
+        "epoch": checkpoint.get("epoch", 0),
+        "step": checkpoint.get("step", 0),
+        "samples_seen": checkpoint.get("samples_seen", 0),
+        "dataset_state": checkpoint.get("dataset_state", None),
+    }
 
 
 @draccus.wrap()
-def pretrain(cfg: PretrainConfig) -> None:
-    overwatch.info("Prismatic VLM Training :: Gathering Light")
+def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
+    print(f"DEBUG: cfg.resume_from_checkpoint = {cfg.resume_from_checkpoint}")
+    overwatch.info("Resumable Prismatic VLM Training :: Gathering Light")
 
-    # Note => Under `torchrun` initializing `overwatch` will automatically set up `torch.distributed`
+    # Setup distributed training
     torch.cuda.set_device(device_id := (overwatch.local_rank()))
     torch.cuda.empty_cache()
 
-    # Create Unique Run Name & Save Directory
+    # Create run directory
     model_id = cfg.model.model_id
-    if (dataset_id := cfg.dataset.dataset_id) == "llava-v15":
+    dataset_id = cfg.dataset.dataset_id
+    if dataset_id == "llava-v15":
         cfg.run_id = f"{model_id}+stage-{cfg.stage}+x{cfg.seed}" if cfg.run_id is None else cfg.run_id
     else:
         cfg.run_id = f"{dataset_id}+{model_id}+stage-{cfg.stage}+x{cfg.seed}" if cfg.run_id is None else cfg.run_id
 
-    # Start =>> Build Directories and Set Randomness
+    # Setup
     overwatch.info('"Life is like a prism; what you see depends on how you turn the glass."', ctx_level=1)
     hf_token = cfg.hf_token.read_text().strip() if isinstance(cfg.hf_token, Path) else os.environ[cfg.hf_token]
     worker_init_fn = set_global_seed(cfg.seed, get_worker_init_fn=True)
-    os.makedirs(run_dir := (cfg.run_root_dir / cfg.run_id), exist_ok=True)
-    os.makedirs(cfg.run_root_dir / cfg.run_id / "checkpoints", exist_ok=True)
+    run_dir = cfg.run_root_dir / cfg.run_id
+    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(run_dir / "checkpoints", exist_ok=True)
+
+    # Save config
     if overwatch.is_rank_zero():
-        # Additionally save a JSON version of the config
         draccus.dump(cfg, open(run_dir / "config.yaml", "w"))
         with open(run_dir / "config.yaml", "r") as f_yaml, open(run_dir / "config.json", "w") as f_json:
             yaml_cfg = yaml.safe_load(f_yaml)
             json.dump(yaml_cfg, f_json, indent=2)
 
-    # Load Vision Backbone --> on CPU, in Full Precision (initializing model, image_transform via TIMM)
+    # Load model components
     overwatch.info(f"Loading Vision Backbone [bold]{cfg.model.vision_backbone_id}[/] via TIMM ")
     vision_backbone, image_transform = get_vision_backbone_and_transform(
         cfg.model.vision_backbone_id, image_resize_strategy=cfg.model.image_resize_strategy
     )
 
-    # Load LLM Backbone --> on CPU, in Full Precision (initializing Tokenizer + handling special tokens if necessary)
-    overwatch.info(f"Loading Pretrained LLM [bold]{cfg.model.llm_backbone_id}[/] via HF Transformers")
+    overwatch.info(f"Loading LLM Backbone [bold]{cfg.model.llm_backbone_id}[/] via HF Transformers")
     llm_backbone, tokenizer = get_llm_backbone_and_tokenizer(
         cfg.model.llm_backbone_id, llm_max_length=cfg.model.llm_max_length, hf_token=hf_token
     )
 
-    # Create VLM => wraps `vision_backbone` and `llm`
+    # Create VLM
     overwatch.info(f"Instantiating PrismaticVLM `{model_id}` for Training Stage = `{cfg.stage}`")
     vlm = get_vlm(
         model_id,
@@ -167,16 +213,11 @@ def pretrain(cfg: PretrainConfig) -> None:
         enable_mixed_precision_training=cfg.model.enable_mixed_precision_training,
     )
 
-    # [Explicit] Call to `freeze_backbones` here for clarity => will log exactly what is frozen / what's not!
     overwatch.info(f"Invoking `VLM.freeze_backbones()` for `{model_id}` => Training Stage: `{cfg.stage}`")
     vlm.freeze_backbones(cfg.stage)
 
-    # Load Weights from Checkpoint (depends on stage, config)
-    overwatch.info(f"Invoking `VLM.load_checkpoint()` for `{model_id}` => Training Stage: `{cfg.stage}`")
-    vlm.load_from_checkpoint(cfg.stage, run_dir, pretrained_checkpoint=cfg.pretrained_checkpoint)
-
-    # Get Dataset for Specified Stage
-    overwatch.info(f"Creating Dataset `{cfg.dataset.dataset_id}` => Stage: `{cfg.stage}`")
+    # Get dataset
+    overwatch.info(f"Loading dataset `{cfg.dataset.dataset_id}` => Stage: `{cfg.stage}`")
     train_dataset, collator = get_dataset_and_collator(
         cfg.stage,
         cfg.dataset,
@@ -188,7 +229,7 @@ def pretrain(cfg: PretrainConfig) -> None:
     )
 
     # Create Train Strategy
-    overwatch.info(f"Initializing Train Strategy `{cfg.train_strategy}`")
+    overwatch.info(f"Initializing Train Strategy: {cfg.train_strategy}")
     train_strategy = get_train_strategy(
         train_strategy=cfg.train_strategy,
         vlm=vlm,
@@ -209,7 +250,10 @@ def pretrain(cfg: PretrainConfig) -> None:
     )
     train_strategy.run_setup(run_dir=run_dir, n_train_examples=len(train_dataset))
 
-    # Create Metrics =>> Handles on the fly tracking, logging to specified trackers (e.g., JSONL, Weights & Biases)
+    # Wrap dataset for resumption (simplified - strategy handles the details)
+    resumable_dataset = train_dataset
+
+    # Create metrics
     overwatch.info(f"Creating Metrics with Active Trackers => `{cfg.trackers}`")
     metrics = Metrics(
         cfg.trackers,
@@ -222,19 +266,33 @@ def pretrain(cfg: PretrainConfig) -> None:
         grad_accumulation_steps=train_strategy.grad_accumulation_steps,
     )
 
-    # Run Training
+    # Run training with resumption support
     overwatch.info("Starting Training Loop")
-    train_strategy.run_training(train_dataset, collator, metrics, stage=cfg.stage, seed=cfg.seed)
+    
+    # Pass resume checkpoint to training strategy
+    resume_checkpoint = cfg.resume_from_checkpoint if cfg.resume_from_checkpoint else None
+    print(f"[DEBUG]{resume_checkpoint}")
+    # Check if using resumable strategy
+    is_resumable_strategy = hasattr(train_strategy, 'load_checkpoint') and hasattr(train_strategy, 'resume_epoch')
+    
+    if is_resumable_strategy:
+        # Use enhanced run_training for resumable strategies
+        overwatch.info("Using resumable training strategy")
+        train_strategy.run_training(
+            resumable_dataset, collator, metrics, 
+            stage=cfg.stage, seed=cfg.seed, resume_checkpoint=resume_checkpoint
+        )
+    else:
+        overwatch.info("[WARNING] Training Strategy is Not Resumable. Stopping...")
 
     # Finalize
     overwatch.info("Done with Training =>> Finalizing Metrics")
     metrics.finalize()
 
-    # And... we're done!
     overwatch.info("... and that's all, folks!")
     dist.barrier()
     dist.destroy_process_group()
 
 
 if __name__ == "__main__":
-    pretrain()
+    resumable_pretrain()
