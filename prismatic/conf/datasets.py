@@ -117,7 +117,7 @@ class CLEVRConfig(DatasetConfig):
 
     # Preprocessed CLEVR dataset json file
     align_stage_components: Tuple[Path, Path] = (
-        Path("data/simple_clevr_train_preprocessed.json"),
+        Path("data/clevr_train_qa_preprocessed.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
     # We don't use finetune stage for CLEVR

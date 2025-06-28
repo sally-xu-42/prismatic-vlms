@@ -45,7 +45,6 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
         train_loss: Optional[float] = None,
     ) -> None:
         """Save a complete checkpoint with FSDP-aware optimizer state. Overrides resumable strategy."""
-        
         # Save optimizer state with FSDP context
         with FSDP.state_dict_type(self.vlm, StateDictType.FULL_STATE_DICT):
             optimizer_state = self.optimizer.state_dict()

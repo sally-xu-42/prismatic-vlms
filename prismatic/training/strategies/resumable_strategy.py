@@ -81,8 +81,8 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         getattr(self.vlm, key).load_state_dict(model_dict[key])
         
         # Load optimizer state
-        if "optimizer" in checkpoint and self.optimizer:
-            self.optimizer.load_state_dict(checkpoint["optimizer"])
+        # if "optimizer" in checkpoint and self.optimizer:
+        #     self.optimizer.load_state_dict(checkpoint["optimizer"])
         
         # Load scheduler state
         if "lr_scheduler" in checkpoint and checkpoint["lr_scheduler"] and self.lr_scheduler:
