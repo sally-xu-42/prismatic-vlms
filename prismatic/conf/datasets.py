@@ -110,7 +110,7 @@ class LLaVa_LVIS4V_LRV_Config(DatasetConfig):
     dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
 
 
-# CLEVR
+# CLEVR & Ablated CLEVR Dataset Configurations
 @dataclass
 class CLEVRConfig(DatasetConfig):
     dataset_id: str = "clevr"
@@ -120,7 +120,23 @@ class CLEVRConfig(DatasetConfig):
         Path("data/clevr_train_qa_preprocessed.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
-    # We don't use finetune stage for CLEVR
+    # We don't use finetune stage for CLEVR, but it's required for consistency
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/CLEVR_v1.0/questions/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class CLEVRFrontConfig(DatasetConfig):
+    dataset_id: str = "clevr-front"
+
+    # Preprocessed CLEVR dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/clevr_train_qa_front_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
+    )
+    # We don't use finetune stage for CLEVR, but it's required for consistency
     finetune_stage_components: Tuple[Path, Path] = (
         Path("data/CLEVR_v1.0/questions/"),
         Path("data/CLEVR_v1.0/questions/"),
@@ -142,6 +158,7 @@ class DatasetRegistry(Enum):
     LLAVA_LVIS4V_LRV = LLaVa_LVIS4V_LRV_Config
 
     CLEVR = CLEVRConfig
+    CLEVR_FRONT_ABLATED = CLEVRFrontConfig
 
     @property
     def dataset_id(self) -> str:

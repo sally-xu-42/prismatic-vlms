@@ -153,15 +153,17 @@ class FSDPStrategy(TrainingStrategy):
             )
 
         # <FSDP> => note that FSDP will automatically take care of device placement (similar to `autocast`)
-        self.vlm = FSDP(
-            self.vlm,
-            auto_wrap_policy=vlm_fsdp_wrapping_policy,
-            mixed_precision=fsdp_precision_policy,
-            sharding_strategy=self.fsdp_sharding_strategy,
-            device_id=torch.cuda.current_device(),
-            limit_all_gathers=True,
-            use_orig_params=True,
-        )
+        # Sally: only wrap the VLM if it is not already wrapped in FSDP!
+        if not isinstance(self.vlm, FSDP):
+            self.vlm = FSDP(
+                self.vlm,
+                auto_wrap_policy=vlm_fsdp_wrapping_policy,
+                mixed_precision=fsdp_precision_policy,
+                sharding_strategy=self.fsdp_sharding_strategy,
+                device_id=torch.cuda.current_device(),
+                limit_all_gathers=True,
+                use_orig_params=True,
+            )
 
         # Gradient Checkpoint Setup
         if self.enable_gradient_checkpointing:

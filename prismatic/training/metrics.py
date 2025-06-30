@@ -140,6 +140,8 @@ class Metrics:
 
     def log(self, global_step: int, metrics: Dict[str, Union[int, float]]) -> None:
         for tracker in self.trackers:
+            # # Sally: change this part for logging
+            # print(f"[DEBUG] {metrics}")
             tracker.write(global_step, metrics)
 
     def get_status(self, loss: Optional[torch.Tensor] = None) -> str:

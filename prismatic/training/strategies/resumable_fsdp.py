@@ -2,6 +2,8 @@
 resumable_fsdp.py
 
 Resumable FSDP strategy that combines FSDPStrategy with ResumableTrainingStrategy.
+Basically we have to rewrite the `save_checkpoint` and add `load_checkpoint` methods.
+This strategy allows for saving and loading checkpoints with FSDP-specific handling,
 """
 
 import shutil
@@ -34,33 +36,6 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
     def __init__(self, *args, **kwargs):
         # Initialize both parent classes
         super().__init__(*args, **kwargs)
-    
-    def save_full_checkpoint(
-        self,
-        checkpoint_path: Path,
-        model_state_dicts: dict,
-        global_step: int,
-        epoch: int,
-        samples_seen: int,
-        train_loss: Optional[float] = None,
-    ) -> None:
-        """Save a complete checkpoint with FSDP-aware optimizer state. Overrides resumable strategy."""
-        # Save optimizer state with FSDP context
-        with FSDP.state_dict_type(self.vlm, StateDictType.FULL_STATE_DICT):
-            optimizer_state = self.optimizer.state_dict()
-        
-        checkpoint = {
-            "model": model_state_dicts,
-            "optimizer": optimizer_state,  # Saved with FSDP context
-            "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
-            "epoch": epoch,
-            "global_step": global_step,
-            "samples_seen": samples_seen,
-            "rng_state": torch.get_rng_state(),
-            "train_loss": train_loss,
-        }
-        torch.save(checkpoint, checkpoint_path)
-        overwatch.info(f"Saved FSDP resumable checkpoint: step={global_step}, epoch={epoch}, samples={samples_seen}")
 
     def save_checkpoint(
         self,
@@ -71,7 +46,7 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
         only_trainable: bool = True,
         samples_seen: int = 0,
     ) -> None:
-        """Enhanced FSDP checkpoint saving with full training state."""
+        """Overrides FSDPstrategy. Save a checkpoint to the `run_dir` only containing the state_dicts for trainable parameters by default."""
         assert isinstance(self.vlm, FSDP), "FSDPStrategy.save_checkpoint assumes VLM is already wrapped in FSDP!"
 
         # Summon Full State Dictionary =>> Reconstitute from Shards
@@ -87,21 +62,32 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
                     if key.startswith(mprefix := f"{mkey}."):
                         model_state_dicts[mkey][key.removeprefix(mprefix)] = param
 
-            # Save on rank zero *only* with enhanced checkpoint
+            # Save on rank zero *only*
             if overwatch.is_rank_zero():
                 checkpoint_dir = run_dir / "checkpoints"
                 if train_loss is None:
                     checkpoint_path = checkpoint_dir / f"step-{global_step:06d}-epoch-{epoch:02d}-loss=inf.pt"
                 else:
-                    checkpoint_path = checkpoint_dir / f"step-{global_step:06d}-epoch-{epoch:02d}-loss={train_loss:.4f}.pt"
-
-                # Save full checkpoint with training state (using override method)
-                self.save_full_checkpoint(
-                    checkpoint_path, model_state_dicts, global_step, epoch, samples_seen, train_loss
-                )
-                
-                # Copy to latest-checkpoint.pt (for easy resumption)
+                    checkpoint_path = (
+                        checkpoint_dir / f"step-{global_step:06d}-epoch-{epoch:02d}-loss={train_loss:.4f}.pt"
+                    )        
+                # optimizer_state = self.optimizer.state_dict()
+                # optimizer_state = FSDP.full_optim_state_dict(self.vlm, self.optimizer, 
+                #                                             rank0_only=True)
+                checkpoint = {
+                    "model": model_state_dicts,
+                    # "optimizer": optimizer_state,  # Saved with FSDP context
+                    "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
+                    "epoch": epoch,
+                    "global_step": global_step,
+                    "samples_seen": samples_seen,
+                    "rng_state": torch.get_rng_state(),
+                    "train_loss": train_loss,
+                }
+                # Save Checkpoint & Copy Latest to `latest-checkpoint.pt`
+                torch.save(checkpoint, checkpoint_path)
                 shutil.copy(checkpoint_path, checkpoint_dir / "latest-checkpoint.pt")
+                overwatch.info(f"Saved FSDP resumable checkpoint: step={global_step}, epoch={epoch}, samples={samples_seen}")
 
     def load_checkpoint(self, checkpoint_path: Path) -> dict:
         """Enhanced checkpoint loading for FSDP with proper state dict handling."""
@@ -112,7 +98,6 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
         # Load model weights with FSDP state dict context
         if "model" in checkpoint:
             model_dict = checkpoint["model"]
-            
             # For FSDP, we need to reconstruct the full state dict and load it properly
             with FSDP.state_dict_type(self.vlm, self.fsdp_state_dict_type, self.fsdp_save_policy):
                 # Reconstruct full state dict from module-based format
@@ -125,10 +110,18 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
                 # Load the reconstructed state dict
                 self.vlm.load_state_dict(full_state_dict, strict=False)
         
-        # Load optimizer state
-        if "optimizer" in checkpoint and self.optimizer:
-            with FSDP.state_dict_type(self.vlm, StateDictType.FULL_STATE_DICT):
-                self.optimizer.load_state_dict(checkpoint["optimizer"])
+        # # Load optimizer state (IMPORTANT: mismatch)
+        # if "optimizer" in checkpoint and self.optimizer:
+        #     try:
+        #         full_optim = checkpoint["optimizer"]
+        #         local_optim = FSDP.optim_state_dict_to_load(
+        #             optim_state_dict=full_optim,
+        #             model=self.vlm,
+        #             optim=self.optimizer
+        #         )
+        #         self.optimizer.load_state_dict(local_optim)
+        #     except Exception as e:
+        #         overwatch.warning(f"Failed to load optimizer state: {e}")
         
         # Load scheduler state
         if "lr_scheduler" in checkpoint and checkpoint["lr_scheduler"] and self.lr_scheduler:

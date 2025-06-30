@@ -224,9 +224,12 @@ class TrainingStrategy(ABC):
                         metrics.commit(global_step=metrics.global_step + 1, lr=self.lr_scheduler.get_last_lr()[0])
                         status = metrics.push()
 
-                        # Add checkpoint saving every 500 steps
+                        # Add checkpoint saving and logging every 500 steps
                         if metrics.global_step % 500 == 0:
                             self.save_checkpoint(metrics.run_dir, metrics.global_step, epoch, loss.item())
+                            overwatch.info(
+                                f"Step {metrics.global_step}, Loss: {loss.item():.4f}, LR: {self.lr_scheduler.get_last_lr()[0]:.4f}"
+                            )
 
                         # Check for Termination & Save Final Checkpoint (in case `max_steps` is not None)
                         if self.max_steps is not None and metrics.global_step >= self.max_steps:

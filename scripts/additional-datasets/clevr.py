@@ -47,7 +47,7 @@ def build_clevr(split="train") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess CLEVR dataset for LLaVa.")
-    parser.add_argument("split", type=str, choices=["train", "val", "test"], help="Dataset split to preprocess.")
+    parser.add_argument("--split", type=str, choices=["train", "val", "test"], help="Dataset split to preprocess.")
     args = parser.parse_args()
 
     build_clevr(args.split)

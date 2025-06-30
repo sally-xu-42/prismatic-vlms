@@ -1,8 +1,9 @@
 """
 resumable_pretrain.py
 
-Modified version of pretrain.py with true resumption capability.
+Modified version of pretrain.py with resumption capability.
 Saves and loads training state including epoch, step, and dataset position.
+The 'save_checkpoint' and 'load_checkpoint' methods are in the specific training strategy.
 """
 
 import json
@@ -117,52 +118,11 @@ class ResumableDataset:
     def load_state(self, state):
         self.current_index = state["current_index"]
         self.start_index = state["start_index"]
-
-
-def save_checkpoint(checkpoint_path, model, optimizer, scheduler, epoch, step, samples_seen, dataset_state=None):
-    """Save full training state including model, optimizer, and training progress."""
-    checkpoint = {
-        "model": {key: getattr(model, key).state_dict() for key in model.trainable_module_keys},
-        "optimizer": optimizer.state_dict(),
-        "scheduler": scheduler.state_dict() if scheduler else None,
-        "epoch": epoch,
-        "step": step,
-        "samples_seen": samples_seen,
-        "dataset_state": dataset_state,
-        "rng_state": torch.get_rng_state(),
-    }
-    torch.save(checkpoint, checkpoint_path)
-    overwatch.info(f"Saved checkpoint to {checkpoint_path}")
-
-
-def load_checkpoint(checkpoint_path, model, optimizer, scheduler):
-    """Load full training state."""
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    
-    # Load model weights
-    for key in model.trainable_module_keys:
-        if key in checkpoint["model"]:
-            getattr(model, key).load_state_dict(checkpoint["model"][key])
-    
-    # Load optimizer and scheduler
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    if scheduler and checkpoint["scheduler"]:
-        scheduler.load_state_dict(checkpoint["scheduler"])
-    
-    # Restore RNG state
-    torch.set_rng_state(checkpoint["rng_state"])
-    
-    return {
-        "epoch": checkpoint.get("epoch", 0),
-        "step": checkpoint.get("step", 0),
-        "samples_seen": checkpoint.get("samples_seen", 0),
-        "dataset_state": checkpoint.get("dataset_state", None),
-    }
-
+        
 
 @draccus.wrap()
 def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
-    print(f"DEBUG: cfg.resume_from_checkpoint = {cfg.resume_from_checkpoint}")
+    # print(f"DEBUG: cfg.resume_from_checkpoint = {cfg.resume_from_checkpoint}")
     overwatch.info("Resumable Prismatic VLM Training :: Gathering Light")
 
     # Setup distributed training
@@ -268,15 +228,10 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
 
     # Run training with resumption support
     overwatch.info("Starting Training Loop")
-    
-    # Pass resume checkpoint to training strategy
     resume_checkpoint = cfg.resume_from_checkpoint if cfg.resume_from_checkpoint else None
-    print(f"[DEBUG]{resume_checkpoint}")
-    # Check if using resumable strategy
     is_resumable_strategy = hasattr(train_strategy, 'load_checkpoint') and hasattr(train_strategy, 'resume_epoch')
     
     if is_resumable_strategy:
-        # Use enhanced run_training for resumable strategies
         overwatch.info("Using resumable training strategy")
         train_strategy.run_training(
             resumable_dataset, collator, metrics, 
@@ -285,7 +240,6 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     else:
         overwatch.info("[WARNING] Training Strategy is Not Resumable. Stopping...")
 
-    # Finalize
     overwatch.info("Done with Training =>> Finalizing Metrics")
     metrics.finalize()
 

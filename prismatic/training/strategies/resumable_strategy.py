@@ -35,75 +35,10 @@ class ResumableTrainingStrategy(TrainingStrategy):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Track resumption state
+        # Track resumption state in addition to TrainingStrategy attributes
         self.resume_epoch = 0
         self.resume_step = 0
         self.resume_samples_seen = 0
-
-    def save_full_checkpoint(
-        self,
-        checkpoint_path: Path,
-        model_state_dicts: dict,
-        global_step: int,
-        epoch: int,
-        samples_seen: int,
-        train_loss: Optional[float] = None,
-    ) -> None:
-        """Save a complete checkpoint with all training state. Overrided for FSDP due to state mismatch."""
-        checkpoint = {
-            "model": model_state_dicts,
-            "optimizer": self.optimizer.state_dict(),
-            "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
-            "epoch": epoch,
-            "global_step": global_step,
-            "samples_seen": samples_seen,
-            "rng_state": torch.get_rng_state(),
-            "train_loss": train_loss,
-        }
-        torch.save(checkpoint, checkpoint_path)
-        overwatch.info(f"Saved resumable checkpoint: step={global_step}, epoch={epoch}, samples={samples_seen}")
-
-    def load_checkpoint(self, checkpoint_path: Path) -> dict:
-        """Load full training state from checkpoint."""
-        overwatch.info(f"Loading resumable checkpoint from: {checkpoint_path}")
-        
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        
-        # Load model weights - handle both old and new checkpoint formats
-        if "model" in checkpoint:
-            model_dict = checkpoint["model"]
-            for key in self.trainable_module_keys:
-                if key in model_dict:
-                    # Handle wrapped models (DDP/FSDP)
-                    if hasattr(self.vlm, 'module'):
-                        getattr(self.vlm.module, key).load_state_dict(model_dict[key])
-                    else:
-                        getattr(self.vlm, key).load_state_dict(model_dict[key])
-        
-        # Load optimizer state
-        # if "optimizer" in checkpoint and self.optimizer:
-        #     self.optimizer.load_state_dict(checkpoint["optimizer"])
-        
-        # Load scheduler state
-        if "lr_scheduler" in checkpoint and checkpoint["lr_scheduler"] and self.lr_scheduler:
-            self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
-        
-        # Restore RNG state
-        if "rng_state" in checkpoint:
-            torch.set_rng_state(checkpoint["rng_state"])
-        
-        # Set resumption state
-        self.resume_epoch = checkpoint.get("epoch", 0)
-        self.resume_step = checkpoint.get("global_step", 0)
-        self.resume_samples_seen = checkpoint.get("samples_seen", 0)
-        
-        overwatch.info(f"Resumed from: epoch={self.resume_epoch}, step={self.resume_step}, samples={self.resume_samples_seen}")
-        
-        return {
-            "epoch": self.resume_epoch,
-            "global_step": self.resume_step,
-            "samples_seen": self.resume_samples_seen,
-        }
 
     def run_training(
         self,
@@ -242,11 +177,14 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         metrics.commit(global_step=metrics.global_step + 1, lr=self.lr_scheduler.get_last_lr()[0])
                         status = metrics.push()
 
-                        # Enhanced checkpoint saving with samples_seen
+                        # Add checkpoint saving and logging every 500 steps
                         if metrics.global_step % 500 == 0:
                             self.save_checkpoint(
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
+                            )
+                            overwatch.info(
+                                f"Step {metrics.global_step}, Loss: {loss.item():.4f}, LR: {self.lr_scheduler.get_last_lr()[0]:.4f}"
                             )
 
                         # Check for Termination
