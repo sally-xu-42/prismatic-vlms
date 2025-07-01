@@ -11,9 +11,9 @@ CLEVR_DIR = BASE_DIR / "CLEVR_v1.0"
 
 def build_clevr(split="train") -> None:
     print("[*] Downloading and Formatting `CLEVR` Dataset!")
-    CLEVR_QUESTIONS_FILE = CLEVR_DIR / f"../CLEVR_{split}_qa.json"
+    CLEVR_QUESTIONS_FILE = CLEVR_DIR / f"../generated_CLEVR/CLEVR_{split}_qa_mixed.json"
     CLEVR_IMG_DIR = CLEVR_DIR / f"images/{split}"
-    CLEVR_JSON_FILE = BASE_DIR / f"clevr_{split}_qa_preprocessed.json"
+    CLEVR_JSON_FILE = BASE_DIR / f"preprocessed_CLEVR/clevr_{split}_qa_mixed_preprocessed.json"
 
     # Open CLEVR Questions JSON File
     with open(CLEVR_QUESTIONS_FILE, "r") as f:
