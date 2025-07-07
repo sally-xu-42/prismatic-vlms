@@ -39,6 +39,52 @@ class ResumableTrainingStrategy(TrainingStrategy):
         self.resume_epoch = 0
         self.resume_step = 0
         self.resume_samples_seen = 0
+    
+    def calculate_validation_loss(
+            self,
+            collator: PaddedCollatorForLanguageModeling,
+            seed: int = 7,
+            val_dataset: Dataset,
+    ) -> float:
+        """Calculate validation loss during training."""
+        sampler = DistributedSampler(
+            val_dataset,
+            num_replicas=overwatch.world_size(),
+            rank=overwatch.rank(),
+            shuffle=False,
+            seed=seed,
+            drop_last=False,
+        )
+        dataloader = DataLoader(
+            val_dataset,
+            batch_size=self.per_device_batch_size,
+            sampler=sampler,
+            collate_fn=collator,
+            num_workers=2,
+            worker_init_fn=self.worker_init_fn,
+        )
+        total_loss = 0.0
+        self.vlm.eval()
+        with torch.no_grad():
+            for batch in dataloader:
+                with torch.autocast(
+                    "cuda",
+                    dtype=self.mixed_precision_dtype,
+                    enabled=self.enable_mixed_precision_training,
+                ):
+                    output: CausalLMOutputWithPast = self.vlm(
+                        input_ids=batch["input_ids"],
+                        attention_mask=batch["attention_mask"],
+                        pixel_values=batch["pixel_values"],
+                        labels=batch["labels"],
+                        multimodal_indices=batch["multimodal_indices"],
+                    )
+                    loss = output.loss
+
+                total_loss += loss.item() * batch["input_ids"].size(0)
+        # Calculate average loss
+        avg_loss = total_loss / len(val_dataset)
+        return avg_loss
 
     def run_training(
         self,
@@ -183,8 +229,15 @@ class ResumableTrainingStrategy(TrainingStrategy):
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
                             )
+                            val_loss = self.calculate_validation_loss(
+                                self.val_dataset, collator, seed=seed
+                            )
+                            metrics.commit(validation_loss=val_loss)
+                            status = metrics.push()
                             overwatch.info(
-                                f"Step {metrics.global_step}, Loss: {loss.item():.4f}, LR: {self.lr_scheduler.get_last_lr()[0]:.4f}"
+                                f"Step {metrics.global_step}, Loss: {loss.item():.4f}, \
+                                LR: {self.lr_scheduler.get_last_lr()[0]:.4f}, \
+                                Validation Loss: {val_loss:.4f}"
                             )
 
                         # Check for Termination

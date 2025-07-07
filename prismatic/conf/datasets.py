@@ -128,6 +128,22 @@ class CLEVRConfig(DatasetConfig):
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 
 @dataclass
+class CLEVRValidationConfig(DatasetConfig):
+    dataset_id: str = "clevr-validation"
+
+    # Preprocessed CLEVR dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_CLEVR/clevr_val_qa_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
+    )
+    # We don't use finetune stage for CLEVR, but it's required for consistency
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/CLEVR_v1.0/questions/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
 class CLEVRFrontConfig(DatasetConfig):
     dataset_id: str = "clevr-front"
 
@@ -174,6 +190,7 @@ class DatasetRegistry(Enum):
     LLAVA_LVIS4V_LRV = LLaVa_LVIS4V_LRV_Config
 
     CLEVR = CLEVRConfig
+    CLEVR_VALIDATION = CLEVRValidationConfig
     CLEVR_FRONT_ABLATED = CLEVRFrontConfig
     CLEVR_MIXED = CLEVRMixedConfig
 
