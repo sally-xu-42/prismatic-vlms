@@ -45,6 +45,10 @@ class ResumablePretrainConfig:
         default_factory=DatasetConfig.get_choice_class(DatasetRegistry.LLAVA_V15.dataset_id)
     )
 
+    val_dataset: DatasetConfig = field(
+        default_factory=DatasetConfig.get_choice_class(DatasetRegistry.LLAVA_V15.dataset_id)
+    )
+
     # Pretraining Stage in < align (projector-only) | finetune (projector + LLM) | full-finetune (all) >
     stage: str = "align"                                            # Pretraining Stage
     
@@ -177,7 +181,7 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     vlm.freeze_backbones(cfg.stage)
 
     # Get dataset
-    overwatch.info(f"Loading dataset `{cfg.dataset.dataset_id}` => Stage: `{cfg.stage}`")
+    overwatch.info(f"Loading training dataset `{cfg.dataset.dataset_id}` => Stage: `{cfg.stage}`")
     train_dataset, collator = get_dataset_and_collator(
         cfg.stage,
         cfg.dataset,
@@ -187,7 +191,16 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
         default_image_resolution=vision_backbone.default_image_resolution,
         padding_side=tokenizer.padding_side,
     )
-
+    overwatch.info(f"Loading validation dataset `{cfg.val_dataset.dataset_id}`")
+    val_dataset, _ = get_dataset_and_collator(
+        cfg.stage,
+        cfg.val_dataset,
+        image_transform,
+        tokenizer,
+        prompt_builder_fn=llm_backbone.prompt_builder_fn,
+        default_image_resolution=vision_backbone.default_image_resolution,
+        padding_side=tokenizer.padding_side,
+    )
     # Create Train Strategy
     overwatch.info(f"Initializing Train Strategy: {cfg.train_strategy}")
     train_strategy = get_train_strategy(
@@ -234,7 +247,7 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     if is_resumable_strategy:
         overwatch.info("Using resumable training strategy")
         train_strategy.run_training(
-            resumable_dataset, collator, metrics, 
+            resumable_dataset, val_dataset, collator, metrics, 
             stage=cfg.stage, seed=cfg.seed, resume_checkpoint=resume_checkpoint
         )
     else:

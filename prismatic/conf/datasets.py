@@ -120,10 +120,10 @@ class CLEVRConfig(DatasetConfig):
         Path("data/preprocessed_CLEVR/clevr_train_qa_preprocessed.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
-    # We don't use finetune stage for CLEVR, but it's required for consistency
+    # Single-stage finetune
     finetune_stage_components: Tuple[Path, Path] = (
-        Path("data/CLEVR_v1.0/questions/"),
-        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/preprocessed_CLEVR/clevr_train_qa_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
     )
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 
@@ -136,10 +136,9 @@ class CLEVRValidationConfig(DatasetConfig):
         Path("data/preprocessed_CLEVR/clevr_val_qa_preprocessed.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
-    # We don't use finetune stage for CLEVR, but it's required for consistency
     finetune_stage_components: Tuple[Path, Path] = (
-        Path("data/CLEVR_v1.0/questions/"),
-        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/preprocessed_CLEVR/clevr_val_qa_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
     )
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 
@@ -152,10 +151,9 @@ class CLEVRFrontConfig(DatasetConfig):
         Path("data/preprocessed_CLEVR/clevr_train_qa_front_preprocessed.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
-    # We don't use finetune stage for CLEVR, but it's required for consistency
     finetune_stage_components: Tuple[Path, Path] = (
-        Path("data/CLEVR_v1.0/questions/"),
-        Path("data/CLEVR_v1.0/questions/"),
+        Path("data/preprocessed_CLEVR/clevr_train_qa_front_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
     )
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 

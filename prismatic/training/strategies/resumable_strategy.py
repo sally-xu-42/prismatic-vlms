@@ -42,16 +42,16 @@ class ResumableTrainingStrategy(TrainingStrategy):
     
     def calculate_validation_loss(
             self,
+            val_dataset: Dataset,
             collator: PaddedCollatorForLanguageModeling,
             seed: int = 7,
-            val_dataset: Dataset,
     ) -> float:
         """Calculate validation loss during training."""
         sampler = DistributedSampler(
             val_dataset,
             num_replicas=overwatch.world_size(),
             rank=overwatch.rank(),
-            shuffle=False,
+            shuffle=True,
             seed=seed,
             drop_last=False,
         )
@@ -63,8 +63,8 @@ class ResumableTrainingStrategy(TrainingStrategy):
             num_workers=2,
             worker_init_fn=self.worker_init_fn,
         )
-        total_loss = 0.0
         self.vlm.eval()
+        # validtion loss over a random batch
         with torch.no_grad():
             for batch in dataloader:
                 with torch.autocast(
@@ -80,15 +80,12 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         multimodal_indices=batch["multimodal_indices"],
                     )
                     loss = output.loss
-
-                total_loss += loss.item() * batch["input_ids"].size(0)
-        # Calculate average loss
-        avg_loss = total_loss / len(val_dataset)
-        return avg_loss
+                    return loss
 
     def run_training(
         self,
         dataset: Dataset,
+        val_dataset: Dataset,
         collator: PaddedCollatorForLanguageModeling,
         metrics: Metrics,
         stage: str = "finetune",
@@ -230,7 +227,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                                 loss.item(), samples_seen=samples_seen
                             )
                             val_loss = self.calculate_validation_loss(
-                                self.val_dataset, collator, seed=seed
+                                val_dataset, collator, seed=seed
                             )
                             metrics.commit(validation_loss=val_loss)
                             status = metrics.push()
