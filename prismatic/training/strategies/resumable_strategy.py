@@ -7,7 +7,7 @@ full resumption capabilities including epoch, step, optimizer state, and dataset
 Resumable Training Strategies (ResDDP, ResFSDP-Grad, ResFSDP-Full) tend to have a lot of repeated components; this class does a lot of
 heavy lifting.
 """
-
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -18,10 +18,14 @@ from tqdm import tqdm
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from prismatic.overwatch import initialize_overwatch
+from prismatic.conf.datasets import DatasetRegistry
 from prismatic.training.strategies.base_strategy import TrainingStrategy
 from prismatic.training.metrics import Metrics
 from prismatic.util.batching_utils import SplitModalitySampler
 from prismatic.util.data_utils import PaddedCollatorForLanguageModeling
+
+sys.path.insert(0, str("/share/data/speech/txu/vlm_semantics"))
+from src import EvalDataset, PaddedCollatorForEval, get_dataset_and_collator
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -44,8 +48,8 @@ class ResumableTrainingStrategy(TrainingStrategy):
             self,
             val_dataset: Dataset,
             collator: PaddedCollatorForLanguageModeling,
-            seed: int = 7,
-    ) -> float:
+            seed: int = 7
+    ) -> torch.Tensor:
         """Calculate validation loss during training."""
         sampler = DistributedSampler(
             val_dataset,
@@ -81,6 +85,58 @@ class ResumableTrainingStrategy(TrainingStrategy):
                     )
                     loss = output.loss
                     return loss
+    
+    def calculate_accuracy(
+            self,
+            seed: int = 7,
+    ) -> torch.Tensor:
+        """Calculate validation accuracy on a single random batch."""
+        # The evaluation dataset configuration, pure auto-generated questions
+        dataset_cfg = DatasetRegistry.CLEVR.value
+        val_dataset, eval_collator = get_dataset_and_collator(
+            dataset_cfg=dataset_cfg,
+            image_transform=self.vlm.vision_backbone.image_transform,
+            tokenizer=self.vlm.llm_backbone.tokenizer,
+            default_image_resolution=self.vlm.vision_backbone.default_image_resolution,
+            padding_side=self.vlm.llm_backbone.tokenizer.padding_side
+        )
+        sampler = DistributedSampler(
+            val_dataset,
+            num_replicas=overwatch.world_size(),
+            rank=overwatch.rank(),
+            shuffle=True,
+            seed=seed,
+            drop_last=False,
+        )
+        dataloader = DataLoader(
+            val_dataset,
+            batch_size=self.per_device_batch_size,
+            sampler=sampler,
+            collate_fn=eval_collator,
+            num_workers=2,
+            worker_init_fn=self.worker_init_fn,
+        )
+        
+        self.vlm.eval()
+        with torch.no_grad():
+            for batch in dataloader:
+                correct = 0
+                total = len(batch['answer'])
+                for i in range(total):
+                    output = self.vlm.generate(
+                        batch["image"][i],
+                        batch['input_text'][i],
+                        max_new_tokens=10,
+                        temperature=None
+                    )
+                    predicted = output.strip().lower()
+                    ground_truth = batch['answer'][i].strip().lower()
+                    if ground_truth in predicted:
+                        correct += 1
+                        print(f"Correct: {predicted} == {ground_truth}")
+                accuracy = correct / total if total > 0 else 0.0
+                print(f"{correct} correct questions in {total} total questions")
+                return accuracy
 
     def run_training(
         self,
@@ -221,20 +277,21 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         status = metrics.push()
 
                         # Add checkpoint saving and logging every 500 steps
-                        if metrics.global_step % 500 == 0:
+                        if metrics.global_step % 50 == 0:
                             self.save_checkpoint(
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
                             )
-                            val_loss = self.calculate_validation_loss(
-                                val_dataset, collator, seed=seed
-                            )
-                            metrics.commit(validation_loss=val_loss)
+                            # val_loss = self.calculate_validation_loss(
+                            #     val_dataset, collator, seed=seed
+                            # )
+                            val_accuracy = self.calculate_accuracy(seed=seed)
+                            metrics.commit(validation_loss=val_accuracy)
                             status = metrics.push()
                             overwatch.info(
                                 f"Step {metrics.global_step}, Loss: {loss.item():.4f}, \
                                 LR: {self.lr_scheduler.get_last_lr()[0]:.4f}, \
-                                Validation Loss: {val_loss:.4f}"
+                                Validation Accuracy: {val_accuracy:.4f}"
                             )
 
                         # Check for Termination
