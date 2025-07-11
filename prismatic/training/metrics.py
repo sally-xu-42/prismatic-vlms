@@ -179,6 +179,8 @@ class Metrics:
                 loss_val = value.detach()
                 self.state["loss_raw"].append(loss_val)
                 self.state["loss"].append(loss_val)
+            elif isinstance(value, float):
+                self.state[key].append(value)
             else:
                 self.state[key].append(value.detach()) # key needs to be predefined in `self.state`
 

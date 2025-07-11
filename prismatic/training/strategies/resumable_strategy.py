@@ -24,6 +24,8 @@ from prismatic.training.metrics import Metrics
 from prismatic.util.batching_utils import SplitModalitySampler
 from prismatic.util.data_utils import PaddedCollatorForLanguageModeling
 
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+
 sys.path.insert(0, str("/share/data/speech/txu/vlm_semantics"))
 from src import EvalDataset, PaddedCollatorForEval, get_dataset_and_collator
 
@@ -91,8 +93,12 @@ class ResumableTrainingStrategy(TrainingStrategy):
             seed: int = 7,
     ) -> torch.Tensor:
         """Calculate validation accuracy on a single random batch."""
+        # Only run on rank 0 to avoid distributed issues
+        if not overwatch.is_rank_zero():
+            return 0.0
         # The evaluation dataset configuration, pure auto-generated questions
         dataset_cfg = DatasetRegistry.CLEVR.value
+        print(dataset_cfg)
         val_dataset, eval_collator = get_dataset_and_collator(
             dataset_cfg=dataset_cfg,
             image_transform=self.vlm.vision_backbone.image_transform,
@@ -100,43 +106,39 @@ class ResumableTrainingStrategy(TrainingStrategy):
             default_image_resolution=self.vlm.vision_backbone.default_image_resolution,
             padding_side=self.vlm.llm_backbone.tokenizer.padding_side
         )
-        sampler = DistributedSampler(
+        dataloader = torch.utils.data.DataLoader(
             val_dataset,
-            num_replicas=overwatch.world_size(),
-            rank=overwatch.rank(),
-            shuffle=True,
-            seed=seed,
-            drop_last=False,
-        )
-        dataloader = DataLoader(
-            val_dataset,
-            batch_size=self.per_device_batch_size,
-            sampler=sampler,
+            batch_size=100,
             collate_fn=eval_collator,
-            num_workers=2,
-            worker_init_fn=self.worker_init_fn,
+            shuffle=False,
+            num_workers=1
         )
-        
         self.vlm.eval()
-        with torch.no_grad():
-            for batch in dataloader:
-                correct = 0
-                total = len(batch['answer'])
-                for i in range(total):
-                    output = self.vlm.generate(
-                        batch["image"][i],
-                        batch['input_text'][i],
-                        max_new_tokens=10,
-                        temperature=None
-                    )
-                    predicted = output.strip().lower()
-                    ground_truth = batch['answer'][i].strip().lower()
-                    if ground_truth in predicted:
-                        correct += 1
-                        print(f"Correct: {predicted} == {ground_truth}")
-                accuracy = correct / total if total > 0 else 0.0
-                print(f"{correct} correct questions in {total} total questions")
-                return accuracy
+        with FSDP.summon_full_params(self.vlm, writeback=False, recurse=True):
+            with torch.no_grad():
+                for batch in tqdm(dataloader, desc="Processing batches"):
+                    correct = 0
+                    images = batch["image"]
+                    prompts = batch['input_text']
+                    answers = batch['answer']
+                    batch_size = len(prompts)
+                    # EvalDataset returns: pixel_values, input_text, answer, input_ids, labels, image
+                    for i in range(batch_size):
+                        output = self.vlm.generate(
+                            images[i],
+                            prompts[i],
+                            max_new_tokens=10,
+                            temperature=None
+                        )
+                        predicted = output.strip().lower()
+                        ground_truth = answers[i].strip().lower()
+                        if ground_truth in predicted:
+                            correct += 1
+                            print(f"Correct: {predicted} == {ground_truth}")
+                    accuracy = correct / batch_size if batch_size > 0 else 0.0
+                    print(f"{correct} correct questions in {batch_size} total questions")
+                    self.vlm.train() # Switch back to training mode
+                    return accuracy
 
     def run_training(
         self,
