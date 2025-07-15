@@ -7,7 +7,9 @@ full resumption capabilities including epoch, step, optimizer state, and dataset
 Resumable Training Strategies (ResDDP, ResFSDP-Grad, ResFSDP-Full) tend to have a lot of repeated components; this class does a lot of
 heavy lifting.
 """
+import os
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,7 @@ from prismatic.overwatch import initialize_overwatch
 from prismatic.conf.datasets import DatasetRegistry
 from prismatic.training.strategies.base_strategy import TrainingStrategy
 from prismatic.training.metrics import Metrics
+from prismatic.models import get_vlm
 from prismatic.util.batching_utils import SplitModalitySampler
 from prismatic.util.data_utils import PaddedCollatorForLanguageModeling
 
@@ -88,57 +91,57 @@ class ResumableTrainingStrategy(TrainingStrategy):
                     loss = output.loss
                     return loss
     
-    def calculate_accuracy(
-            self,
-            seed: int = 7,
-    ) -> torch.Tensor:
-        """Calculate validation accuracy on a single random batch."""
-        # Only run on rank 0 to avoid distributed issues
-        if not overwatch.is_rank_zero():
-            return 0.0
-        # The evaluation dataset configuration, pure auto-generated questions
-        dataset_cfg = DatasetRegistry.CLEVR.value
-        print(dataset_cfg)
-        val_dataset, eval_collator = get_dataset_and_collator(
-            dataset_cfg=dataset_cfg,
-            image_transform=self.vlm.vision_backbone.image_transform,
-            tokenizer=self.vlm.llm_backbone.tokenizer,
-            default_image_resolution=self.vlm.vision_backbone.default_image_resolution,
-            padding_side=self.vlm.llm_backbone.tokenizer.padding_side
-        )
-        dataloader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=100,
-            collate_fn=eval_collator,
-            shuffle=False,
-            num_workers=1
-        )
-        self.vlm.eval()
-        with FSDP.summon_full_params(self.vlm, writeback=False, recurse=True):
-            with torch.no_grad():
-                for batch in tqdm(dataloader, desc="Processing batches"):
-                    correct = 0
-                    images = batch["image"]
-                    prompts = batch['input_text']
-                    answers = batch['answer']
-                    batch_size = len(prompts)
-                    # EvalDataset returns: pixel_values, input_text, answer, input_ids, labels, image
-                    for i in range(batch_size):
-                        output = self.vlm.generate(
-                            images[i],
-                            prompts[i],
-                            max_new_tokens=10,
-                            temperature=None
-                        )
-                        predicted = output.strip().lower()
-                        ground_truth = answers[i].strip().lower()
-                        if ground_truth in predicted:
-                            correct += 1
-                            print(f"Correct: {predicted} == {ground_truth}")
-                    accuracy = correct / batch_size if batch_size > 0 else 0.0
-                    print(f"{correct} correct questions in {batch_size} total questions")
-                    self.vlm.train() # Switch back to training mode
-                    return accuracy
+    # def calculate_accuracy(
+    #         self,
+    #         seed: int = 7,
+    # ) -> torch.Tensor:
+    #     """Calculate validation accuracy on a single random batch."""
+    #     # Only run on rank 0 to avoid distributed issues
+    #     if not overwatch.is_rank_zero():
+    #         return 0.0
+    #     # The evaluation dataset configuration, pure auto-generated questions
+    #     dataset_cfg = DatasetRegistry.CLEVR.value
+
+    #     val_dataset, eval_collator = get_dataset_and_collator(
+    #         dataset_cfg=dataset_cfg,
+    #         image_transform=self.vlm.vision_backbone.image_transform,
+    #         tokenizer=self.vlm.llm_backbone.tokenizer,
+    #         default_image_resolution=self.vlm.vision_backbone.default_image_resolution,
+    #         padding_side=self.vlm.llm_backbone.tokenizer.padding_side
+    #     )
+    #     dataloader = torch.utils.data.DataLoader(
+    #         val_dataset,
+    #         batch_size=100,
+    #         collate_fn=eval_collator,
+    #         shuffle=False,
+    #         num_workers=1
+    #     )
+    #     self.vlm.eval()
+    #     with FSDP.summon_full_params(self.vlm, writeback=False, recurse=True):
+    #         with torch.no_grad():
+    #             for batch in tqdm(dataloader, desc="Processing batches"):
+    #                 correct = 0
+    #                 images = batch["image"]
+    #                 prompts = batch['input_text']
+    #                 answers = batch['answer']
+    #                 batch_size = len(prompts)
+    #                 # EvalDataset returns: pixel_values, input_text, answer, input_ids, labels, image
+    #                 for i in range(batch_size):
+    #                     output = self.vlm.generate(
+    #                         images[i],
+    #                         prompts[i],
+    #                         max_new_tokens=10,
+    #                         temperature=None
+    #                     )
+    #                     predicted = output.strip().lower()
+    #                     ground_truth = answers[i].strip().lower()
+    #                     if ground_truth in predicted:
+    #                         correct += 1
+    #                         print(f"Correct: {predicted} == {ground_truth}")
+    #                 accuracy = correct / batch_size if batch_size > 0 else 0.0
+    #                 print(f"{correct} correct questions in {batch_size} total questions")
+    #                 self.vlm.train() # Switch back to training mode
+    #                 return accuracy
 
     def run_training(
         self,
@@ -287,7 +290,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                             # val_loss = self.calculate_validation_loss(
                             #     val_dataset, collator, seed=seed
                             # )
-                            val_accuracy = self.calculate_accuracy(seed=seed)
+                            val_accuracy = self.eval_latest(run_dir=metrics.run_dir)
                             metrics.commit(validation_loss=val_accuracy)
                             status = metrics.push()
                             overwatch.info(
