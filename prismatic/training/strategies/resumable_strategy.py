@@ -90,58 +90,6 @@ class ResumableTrainingStrategy(TrainingStrategy):
                     )
                     loss = output.loss
                     return loss
-    
-    # def calculate_accuracy(
-    #         self,
-    #         seed: int = 7,
-    # ) -> torch.Tensor:
-    #     """Calculate validation accuracy on a single random batch."""
-    #     # Only run on rank 0 to avoid distributed issues
-    #     if not overwatch.is_rank_zero():
-    #         return 0.0
-    #     # The evaluation dataset configuration, pure auto-generated questions
-    #     dataset_cfg = DatasetRegistry.CLEVR.value
-
-    #     val_dataset, eval_collator = get_dataset_and_collator(
-    #         dataset_cfg=dataset_cfg,
-    #         image_transform=self.vlm.vision_backbone.image_transform,
-    #         tokenizer=self.vlm.llm_backbone.tokenizer,
-    #         default_image_resolution=self.vlm.vision_backbone.default_image_resolution,
-    #         padding_side=self.vlm.llm_backbone.tokenizer.padding_side
-    #     )
-    #     dataloader = torch.utils.data.DataLoader(
-    #         val_dataset,
-    #         batch_size=100,
-    #         collate_fn=eval_collator,
-    #         shuffle=False,
-    #         num_workers=1
-    #     )
-    #     self.vlm.eval()
-    #     with FSDP.summon_full_params(self.vlm, writeback=False, recurse=True):
-    #         with torch.no_grad():
-    #             for batch in tqdm(dataloader, desc="Processing batches"):
-    #                 correct = 0
-    #                 images = batch["image"]
-    #                 prompts = batch['input_text']
-    #                 answers = batch['answer']
-    #                 batch_size = len(prompts)
-    #                 # EvalDataset returns: pixel_values, input_text, answer, input_ids, labels, image
-    #                 for i in range(batch_size):
-    #                     output = self.vlm.generate(
-    #                         images[i],
-    #                         prompts[i],
-    #                         max_new_tokens=10,
-    #                         temperature=None
-    #                     )
-    #                     predicted = output.strip().lower()
-    #                     ground_truth = answers[i].strip().lower()
-    #                     if ground_truth in predicted:
-    #                         correct += 1
-    #                         print(f"Correct: {predicted} == {ground_truth}")
-    #                 accuracy = correct / batch_size if batch_size > 0 else 0.0
-    #                 print(f"{correct} correct questions in {batch_size} total questions")
-    #                 self.vlm.train() # Switch back to training mode
-    #                 return accuracy
 
     def run_training(
         self,
@@ -287,16 +235,17 @@ class ResumableTrainingStrategy(TrainingStrategy):
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
                             )
-                            # val_loss = self.calculate_validation_loss(
-                            #     val_dataset, collator, seed=seed
-                            # )
-                            val_accuracy = self.eval_latest(run_dir=metrics.run_dir)
-                            metrics.commit(validation_loss=val_accuracy)
+                            val_loss = self.calculate_validation_loss(
+                                val_dataset, collator, seed=seed
+                            )
+                            # Because of OOM, we gave up this method
+                            # val_loss = self.eval_latest(run_dir=metrics.run_dir)
+                            metrics.commit(validation_loss=val_loss)
                             status = metrics.push()
                             overwatch.info(
                                 f"Step {metrics.global_step}, Loss: {loss.item():.4f}, \
                                 LR: {self.lr_scheduler.get_last_lr()[0]:.4f}, \
-                                Validation Accuracy: {val_accuracy:.4f}"
+                                Validation Accuracy: {val_loss:.4f}"
                             )
 
                         # Check for Termination

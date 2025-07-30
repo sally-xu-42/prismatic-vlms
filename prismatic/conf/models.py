@@ -488,6 +488,15 @@ class Prism_7B_DINOSigLIP_224px(Exp_7B_One_Stage):
     arch_specifier: str = "no-align+fused-gelu-mlp"
     finetune_epochs: int = 2
 
+# === Sally: Added instruction-tuned LM backbones ===
+@dataclass
+class Instruct_7B_DINOSigLIP(Exp_7B_One_Stage):
+    model_id: str = "instruct-dinosiglip+7b"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "llama2-7b-chat"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 2
 
 # === Define a Model Registry Enum for Reference & Validation ===
 @unique
@@ -565,6 +574,9 @@ class ModelRegistry(Enum):
     # === Inference Optimized :: 224px Prism Models ===
     PRISM_DINOSIGLIP_224PX_CONTROLLED_7B = Prism_7B_DINOSigLIP_224px_Controlled
     PRISM_DINOSIGLIP_224PX_7B = Prism_7B_DINOSigLIP_224px
+
+    # === Added :: Instruct-tuned LM Backbones ===
+    INSTRUCT_DINOSIGLIP_7B = Instruct_7B_DINOSigLIP
 
     @property
     def model_id(self) -> str:

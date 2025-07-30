@@ -161,11 +161,14 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
         Because of hf and FSDP incompatibility issues, we have to load the model from the config file and the latest checkpoint.
         This is a workaround to ensure we can evaluate the model without loading the entire FSDP state dict.
         """
+        self.vlm.cpu() # shove shards to CPUs
         torch.cuda.empty_cache()
         config_path = os.path.join(os.getenv("RUN_DIR", run_dir), "config.json") if os.path.isdir(os.getenv("RUN_DIR", run_dir)) else None
+        print(f"Loading config {config_path}...")
         with open(config_path, 'r') as f:
             config = json.load(f)
             cfg = decode(ModelConfig, config["model"])
+            print(f"{cfg}\n")
 
         vision_backbone, image_transform = get_vision_backbone_and_transform(
             cfg.vision_backbone_id,
@@ -209,7 +212,7 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
             val_dataset,
             batch_size=100,
             collate_fn=eval_collator,
-            shuffle=False,
+            shuffle=True,
             num_workers=1
         )
         with torch.no_grad():
@@ -221,7 +224,8 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
                 batch_size = len(prompts)
                 # EvalDataset returns: pixel_values, input_text, answer, input_ids, labels, image
                 for i in range(batch_size):
-                    output = self.vlm.generate(
+                    # Using the new vlm
+                    output = vlm.generate(
                         images[i],
                         prompts[i],
                         max_new_tokens=10,
@@ -242,6 +246,7 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
                 del vlm, llm_backbone, vision_backbone, tokenizer, image_transform
                 torch.cuda.empty_cache()
                 
+                self.vlm.cuda()
                 return accuracy
 
     # Inherit run_setup from FSDPStrategy
