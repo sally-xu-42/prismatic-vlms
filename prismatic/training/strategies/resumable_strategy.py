@@ -30,7 +30,7 @@ from prismatic.util.data_utils import PaddedCollatorForLanguageModeling
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 sys.path.insert(0, str("/share/data/speech/txu/vlm_semantics"))
-from src import EvalDataset, PaddedCollatorForEval, get_dataset_and_collator
+# from src import EvalDataset, PaddedCollatorForEval, get_dataset_and_collator
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -94,7 +94,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
     def run_training(
         self,
         dataset: Dataset,
-        val_dataset: Dataset,
+        # val_dataset: Dataset,
         collator: PaddedCollatorForLanguageModeling,
         metrics: Metrics,
         stage: str = "finetune",
@@ -230,22 +230,21 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         status = metrics.push()
 
                         # Add checkpoint saving and logging every 500 steps
-                        if metrics.global_step % 50 == 0:
+                        if metrics.global_step % 500 == 0:
                             self.save_checkpoint(
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
                             )
-                            val_loss = self.calculate_validation_loss(
-                                val_dataset, collator, seed=seed
-                            )
-                            # Because of OOM, we gave up this method
-                            # val_loss = self.eval_latest(run_dir=metrics.run_dir)
-                            metrics.commit(validation_loss=val_loss)
+                            # val_loss = self.calculate_validation_loss(
+                            #     val_dataset, collator, seed=seed
+                            # )
+                            # # Because of OOM, we gave up this method
+                            # # val_loss = self.eval_latest(run_dir=metrics.run_dir)
+                            # metrics.commit(validation_loss=val_loss)
                             status = metrics.push()
                             overwatch.info(
                                 f"Step {metrics.global_step}, Loss: {loss.item():.4f}, \
-                                LR: {self.lr_scheduler.get_last_lr()[0]:.4f}, \
-                                Validation Accuracy: {val_loss:.4f}"
+                                LR: {self.lr_scheduler.get_last_lr()[0]:.4f}"
                             )
 
                         # Check for Termination

@@ -10,6 +10,7 @@ import torch
 from torch import nn as nn
 from transformers import LlamaForCausalLM
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from peft import LoraConfig
 
 from prismatic.models.backbones.llm.base_llm import HFCausalLLMBackbone
 from prismatic.models.backbones.llm.prompting import (
@@ -59,7 +60,20 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
         llm_max_length: int = 2048,
         hf_token: Optional[str] = None,
         inference_mode: bool = False,
-        use_flash_attention_2: bool = True,
+        use_flash_attention_2: bool = False,
+        enable_peft = True, #      <<<<<<<<<<<<<<<         ################### set this to True for finetune stage #######################
+        lora_config = LoraConfig(
+            r=128, 
+            lora_alpha=256, 
+            lora_dropout=0.05,
+            bias="none",
+            target_modules= [
+                "qkv_proj",
+                "o_proj",
+                "down_proj",
+                "gate_up_proj"],
+            task_type="CAUSAL_LM"
+            ),
     ) -> None:
         super().__init__(
             llm_backbone_id,
@@ -67,6 +81,8 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
             hf_token=hf_token,
             inference_mode=inference_mode,
             use_flash_attention_2=use_flash_attention_2,
+            enable_peft = enable_peft,
+            lora_peft_config = lora_config,
             **LLAMA2_MODELS[llm_backbone_id],
         )
 

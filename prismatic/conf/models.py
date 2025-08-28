@@ -454,7 +454,7 @@ class Prism_7B_DINOSigLIP(Exp_7B_One_Stage):
     image_resize_strategy: str = "resize-naive"
     llm_backbone_id: str = "llama2-7b-pure"
     arch_specifier: str = "no-align+fused-gelu-mlp"
-    finetune_epochs: int = 2
+    finetune_epochs: int = 1    # >>>>>>>>>>> txu: changed to only 1 epoch of finetuning and LoRA
 
 
 #   =>> Note :: Run with `--dataset.type "llava-lvis4v-lrv"`
@@ -497,6 +497,25 @@ class Instruct_7B_DINOSigLIP(Exp_7B_One_Stage):
     llm_backbone_id: str = "llama2-7b-chat"
     arch_specifier: str = "no-align+fused-gelu-mlp"
     finetune_epochs: int = 2
+
+
+"""
+My Models
+"""
+
+@dataclass
+class DINO_SigLIP_PHI3_LORA(LLaVa_v15_Reproduction_7B):
+    model_id: str = "dino-siglip-phi3-lora-model"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "phi3_base"
+    arch_specifier: str = "fused-gelu-mlp"
+    llm_max_length = 4096
+    align_global_batch_size: int = 64
+    align_per_device_batch_size: int = 8
+    finetune_global_batch_size: int = 32
+    finetune_per_device_batch_size: int = 4
+
 
 # === Define a Model Registry Enum for Reference & Validation ===
 @unique
@@ -577,6 +596,9 @@ class ModelRegistry(Enum):
 
     # === Added :: Instruct-tuned LM Backbones ===
     INSTRUCT_DINOSIGLIP_7B = Instruct_7B_DINOSigLIP
+
+    # === Added :: LoRA-finetuned instruct LM Backbones ===
+    MY_MODEL = DINO_SigLIP_PHI3_LORA
 
     @property
     def model_id(self) -> str:

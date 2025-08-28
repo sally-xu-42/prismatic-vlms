@@ -7,6 +7,23 @@ Abstract class definition of a multi-turn prompt builder for ensuring consistent
 from abc import ABC, abstractmethod
 from typing import Optional
 
+# Default System Prompt for Base Models
+SYS_PROMPTS = {
+    "prismatic": (
+        # "You are a helpful language and vision assistant. "
+        # "You are able to understand the visual content that the user provides, "
+        # "and assist the user with a variety of tasks using natural language. "
+        # (txu) =>> added specific prompts for spatial reasoning tasks
+        # "By `behind` I mean further from the viewer. "
+        # "By `in front of` I mean closer to the viewer. "
+        # "By `left` I mean closer to the left edge of the image. "
+        # "By `right` I mean closer to the right edge of the image. "
+        # "Only answer with one word: `yes` or `no`. "
+    ),
+}
+
+def format_system_prompt(system_prompt: str) -> str:
+    return f"{system_prompt.strip()}\n\n"
 
 class PromptBuilder(ABC):
     def __init__(self, model_family: str, system_prompt: Optional[str] = None) -> None:
@@ -28,12 +45,18 @@ class PromptBuilder(ABC):
 class PurePromptBuilder(PromptBuilder):
     def __init__(self, model_family: str, system_prompt: Optional[str] = None) -> None:
         super().__init__(model_family, system_prompt)
+        # print(self.model_family)
+        # self.system_prompt = format_system_prompt(
+        #     SYS_PROMPTS[self.model_family] if system_prompt is None else system_prompt
+        # )
+        self.system_prompt = ""
 
         # TODO (siddk) =>> Can't always assume LlamaTokenizer --> FIX ME!
         self.bos, self.eos = "<s>", "</s>"
 
         # Get role-specific "wrap" functions
         self.wrap_human = lambda msg: f"In: {msg}\nOut: "
+        # self.wrap_human = lambda msg: f"{msg}"
         self.wrap_gpt = lambda msg: f"{msg if msg != '' else ' '}{self.eos}"
 
         # === `self.prompt` gets built up over multiple turns ===
@@ -43,7 +66,11 @@ class PurePromptBuilder(PromptBuilder):
         assert (role == "human") if (self.turn_count % 2 == 0) else (role == "gpt")
         message = message.replace("<image>", "").strip()
 
-        if (self.turn_count % 2) == 0:
+        # Special Handling for "system" prompt (turn_count == 0)
+        if self.turn_count == 0:
+            sys_message = self.wrap_human(self.system_prompt + message) # (txu) =>> what is wrap_human?
+            wrapped_message = sys_message
+        elif (self.turn_count % 2) == 0:
             human_message = self.wrap_human(message)
             wrapped_message = human_message
         else:

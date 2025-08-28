@@ -9,6 +9,8 @@ We currently only support Map-style Datasets; assumes that all files (annotation
 random access image reading is relatively cheap/fast.
 """
 
+import re
+import sys
 import copy
 import json
 from pathlib import Path
@@ -45,6 +47,19 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         # Load Chat JSON
         with open(self.chat_json, "r") as f:
             self.examples = json.load(f)
+    
+    def identify_relation(self, question: str) -> str:
+        """ (txu) =>> Identify the spatial relation in a question.
+           Helper function copied from eval.py.
+        """
+        spatial_relations = ["right", "left", "behind", "in front of"]
+        
+        for relation in spatial_relations:
+            pattern = r'\b' + re.escape(relation) + r'\b'
+            if re.search(pattern, question.lower()):
+                return relation
+        
+        return "other"
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
@@ -90,7 +105,14 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         # labels[:len(preanswer_ids)] = IGNORE_INDEX
 
         # 只tokenize答案部分，然后构建完整序列
-        question_part = "Question: " + conversation[0]["value"] + "Answer:"
+        prompts = {"in front of": "In this 3D scene, `in front of` means closer to the camera/viewer (smaller depth value). ",
+                   "behind": "In this 3D scene, `behind` means farther away from the camera/viewer (larger depth value). "}
+        q = conversation[0]["value"]
+        if self.identify_relation(q) in ["behind", "in front of"]: # special prompts for front and behind
+            question_part = prompts[self.identify_relation(q)] + "Question: " + q + "Answer:"
+        else:
+            question_part = "Question: " + conversation[0]["value"] + "Answer:"
+        # question_part = "Question: " + conversation[0]["value"] + "Answer:"
         answer_part = conversation[-1]["value"] + self.tokenizer.eos_token
         # 分别tokenize
         question_ids = self.tokenizer(question_part, truncation=True, return_tensors="pt").input_ids[0]
@@ -102,8 +124,8 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
             torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
             answer_ids  # 只学习答案部分
         ])
-        # print(f"Question: {conversation[0]['value']}, Answer: {conversation[-1]['value']}")
-        # print(f"Input IDs: {input_ids}, Labels: {labels}")
+        print(f"Question: {question_part}, Answer: {conversation[-1]['value']}")
+        print(f"Input IDs: {input_ids}, Labels: {labels}")
 
         # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
         pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
@@ -162,6 +184,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
         for turn_idx, turn in enumerate(conversation):
             # Get "effective" string added to prompt --> handle whitespace for tokenizer type!
             msg = prompt_builder.add_turn(turn["from"], turn["value"])
+            print(f"Turn: {msg}")
 
             # Llama Tokenizer (Fast) adds extra character if a string ends in whitespace --> strip if non-empty!
             if isinstance(self.tokenizer, LlamaTokenizerFast):
@@ -202,6 +225,8 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
 
             # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
             pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+
+            print(f"Input IDs: {input_ids}, \n Labels: {labels}")
 
             return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
 

@@ -17,6 +17,11 @@ SYS_PROMPTS = {
         "You are a helpful language and vision assistant. "
         "You are able to understand the visual content that the user provides, "
         "and assist the user with a variety of tasks using natural language."
+        # # (txu) =>> added specific prompts for spatial reasoning tasks
+        # "By `behind` I mean further from the camera. "
+        # "By `in front of` I mean closer to the camera. "
+        # "By `left` I mean closer to the left edge of the image. "
+        # "By `right` I mean closer to the right edge of the image. "
     ),
 }
 

@@ -147,7 +147,7 @@ class PrismaticVLM(VLM):
 
         elif stage == "finetune":
             self.vision_backbone.requires_grad_(False)
-            self.llm_backbone.requires_grad_(True)
+            # self.llm_backbone.requires_grad_(True)  #---------->>>>>>>----------->>>>>>>>>>>------>>>>>>> LoRA finetuning
             self.projector.requires_grad_(True)
 
             # Add to `self.trainable_module_keys`
@@ -569,3 +569,53 @@ class PrismaticVLM(VLM):
         generated_text = tokenizer.decode(generated_ids[0, input_ids.shape[1] :], skip_special_tokens=True).strip()
 
         return generated_text
+    
+    @torch.inference_mode()
+    def candidate_scoring(self, image: Image, prompt_text: str, candidates: List[str] = None, **kwargs: str) -> str:
+        # For now, only support generation with a batch size of 1 for simplicity
+        image_transform, tokenizer = self.vision_backbone.image_transform, self.llm_backbone.tokenizer
+
+        scores = []
+        for cand in candidates:
+            # Create full prompt with candidate
+            full_prompt = f"{prompt_text}{cand}"
+            
+            # Prepare inputs
+            input_ids = tokenizer(full_prompt, truncation=True, return_tensors="pt").input_ids.to(self.device)
+            pixel_values = image_transform(image)
+            if isinstance(pixel_values, torch.Tensor):
+                pixel_values = pixel_values[None, ...].to(self.device)
+            elif isinstance(pixel_values, dict):
+                pixel_values = {k: v[None, ...].to(self.device) for k, v in pixel_values.items()}
+            else:
+                raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
+
+            # Generate with scoring enabled
+            autocast_dtype = self.llm_backbone.half_precision_dtype
+            with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
+                output = super().generate(
+                    input_ids=input_ids,
+                    pixel_values=pixel_values,
+                    return_dict_in_generate=True,
+                    output_scores=True,
+                    use_cache=False,
+                    **kwargs
+                )
+            
+            # Get logits and calculate candidate probability
+            logits = output.scores[0][0]  # Shape: [vocab_size]
+            
+            # Get candidate token IDs
+            cand_ids = tokenizer(" " + cand, add_special_tokens=False).input_ids
+            cand_ids = torch.tensor(cand_ids, device=self.device)
+            
+            # Calculate log probabilities
+            log_prob = torch.log_softmax(logits, dim=-1)
+            lp = log_prob[cand_ids].sum()
+            scores.append(lp.item())
+        
+        # Return best candidate and all scores
+        best_idx = int(torch.argmax(torch.tensor(scores)))
+        score_dict = dict(zip(candidates, scores))
+        return candidates[best_idx], score_dict
+
