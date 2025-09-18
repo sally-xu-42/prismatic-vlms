@@ -48,48 +48,49 @@ class ResumableTrainingStrategy(TrainingStrategy):
         self.resume_epoch = 0
         self.resume_step = 0
         self.resume_samples_seen = 0
+        self.reset_for_new_stage = False  # Whether to reset counters for a new training stage
     
-    def calculate_validation_loss(
-            self,
-            val_dataset: Dataset,
-            collator: PaddedCollatorForLanguageModeling,
-            seed: int = 7
-    ) -> torch.Tensor:
-        """Calculate validation loss during training."""
-        sampler = DistributedSampler(
-            val_dataset,
-            num_replicas=overwatch.world_size(),
-            rank=overwatch.rank(),
-            shuffle=True,
-            seed=seed,
-            drop_last=False,
-        )
-        dataloader = DataLoader(
-            val_dataset,
-            batch_size=self.per_device_batch_size,
-            sampler=sampler,
-            collate_fn=collator,
-            num_workers=2,
-            worker_init_fn=self.worker_init_fn,
-        )
-        self.vlm.eval()
-        # validtion loss over a random batch
-        with torch.no_grad():
-            for batch in dataloader:
-                with torch.autocast(
-                    "cuda",
-                    dtype=self.mixed_precision_dtype,
-                    enabled=self.enable_mixed_precision_training,
-                ):
-                    output: CausalLMOutputWithPast = self.vlm(
-                        input_ids=batch["input_ids"],
-                        attention_mask=batch["attention_mask"],
-                        pixel_values=batch["pixel_values"],
-                        labels=batch["labels"],
-                        multimodal_indices=batch["multimodal_indices"],
-                    )
-                    loss = output.loss
-                    return loss
+    # def calculate_validation_loss(
+    #         self,
+    #         val_dataset: Dataset,
+    #         collator: PaddedCollatorForLanguageModeling,
+    #         seed: int = 7
+    # ) -> torch.Tensor:
+    #     """Calculate validation loss during training."""
+    #     sampler = DistributedSampler(
+    #         val_dataset,
+    #         num_replicas=overwatch.world_size(),
+    #         rank=overwatch.rank(),
+    #         shuffle=True,
+    #         seed=seed,
+    #         drop_last=False,
+    #     )
+    #     dataloader = DataLoader(
+    #         val_dataset,
+    #         batch_size=self.per_device_batch_size,
+    #         sampler=sampler,
+    #         collate_fn=collator,
+    #         num_workers=2,
+    #         worker_init_fn=self.worker_init_fn,
+    #     )
+    #     self.vlm.eval()
+    #     # validtion loss over a random batch
+    #     with torch.no_grad():
+    #         for batch in dataloader:
+    #             with torch.autocast(
+    #                 "cuda",
+    #                 dtype=self.mixed_precision_dtype,
+    #                 enabled=self.enable_mixed_precision_training,
+    #             ):
+    #                 output: CausalLMOutputWithPast = self.vlm(
+    #                     input_ids=batch["input_ids"],
+    #                     attention_mask=batch["attention_mask"],
+    #                     pixel_values=batch["pixel_values"],
+    #                     labels=batch["labels"],
+    #                     multimodal_indices=batch["multimodal_indices"],
+    #                 )
+    #                 loss = output.loss
+    #                 return loss
 
     def run_training(
         self,
@@ -106,6 +107,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
         
         # Load checkpoint if resuming
         if resume_checkpoint:
+            # Reset counters if starting a new stage
             self.load_checkpoint(resume_checkpoint)
             # Update metrics to start from correct step
             metrics.global_step = self.resume_step
@@ -235,12 +237,6 @@ class ResumableTrainingStrategy(TrainingStrategy):
                                 metrics.run_dir, metrics.global_step, epoch, 
                                 loss.item(), samples_seen=samples_seen
                             )
-                            # val_loss = self.calculate_validation_loss(
-                            #     val_dataset, collator, seed=seed
-                            # )
-                            # # Because of OOM, we gave up this method
-                            # # val_loss = self.eval_latest(run_dir=metrics.run_dir)
-                            # metrics.commit(validation_loss=val_loss)
                             status = metrics.push()
                             overwatch.info(
                                 f"Step {metrics.global_step}, Loss: {loss.item():.4f}, \
@@ -263,7 +259,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
             # Save checkpoint at end of training
             if self.max_steps is None:
                 self.save_checkpoint(
-                    metrics.run_dir, metrics.global_step, epoch, 
+                    metrics.run_dir, metrics.global_step, epoch, stage,
                     loss.item(), samples_seen=samples_seen
                 )
                 dist.barrier()

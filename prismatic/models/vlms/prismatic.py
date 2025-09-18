@@ -79,7 +79,7 @@ class PrismaticVLM(VLM):
         for trigger_string in ["True", "False", "Yes", "No"] + [chr(ord("A") + i) for i in range(26)]:
             token_idx_list = self.llm_backbone.tokenizer.encode(trigger_string, add_special_tokens=False)
             assert len(token_idx_list) == 1, f'String "{trigger_string}" is tokenized as more than one token!'
-            self.string2idx[trigger_string] = token_idx_list[0]
+            self.string2idx[trigger_string] = token_idx_list[0] 
 
     @classmethod
     def from_pretrained(

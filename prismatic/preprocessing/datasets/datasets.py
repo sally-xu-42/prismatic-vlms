@@ -47,19 +47,6 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         # Load Chat JSON
         with open(self.chat_json, "r") as f:
             self.examples = json.load(f)
-    
-    def identify_relation(self, question: str) -> str:
-        """ (txu) =>> Identify the spatial relation in a question.
-           Helper function copied from eval.py.
-        """
-        spatial_relations = ["right", "left", "behind", "in front of"]
-        
-        for relation in spatial_relations:
-            pattern = r'\b' + re.escape(relation) + r'\b'
-            if re.search(pattern, question.lower()):
-                return relation
-        
-        return "other"
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
@@ -83,54 +70,87 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         image_path, conversation = Path(self.examples[idx]["image"]), self.examples[idx]["conversations"]
         assert (len(conversation) == 2) and ("<image>" not in conversation[-1]["value"]), "Unexpected text!"
 
-        # # Format Caption --> {caption}{eos_token}
-        # # Sally: include the question in the caption, so that the model can learn to answer it.
-        # # caption = self.prompt_template.format(caption=conversation[-1]["value"].strip())
-        # caption = self.prompt_template.format(caption=("Question: " + conversation[0]["value"]
-        #                                                + "Answer: " + conversation[-1]["value"]).strip())
-        # preanswer = "Question: " + conversation[0]["value"] + "Answer: ".strip()
+        # Format Caption --> {caption}{eos_token}
+        caption = self.prompt_template.format(caption=conversation[-1]["value"].strip())
 
-        # # We treat image patches as "tokens = [p1 p2 p3, ...]"; we need to specify ordering of text/patch tokens.
-        # #   => Critically, we find that inserting *after* the BOS token leads to the strongest performance!
-        # #       - input_ids = "<s> p1 p2 p3 ... <caption_text> \n"
-        # #       - labels = "IGNORE IGNORE ..." (copy `input_ids` replacing <s> and p{1...K} with IGNORE)
-        # #
-        # # IMPORTANT => IF WE'RE USING HF LLM.forward(... labels=labels), SHIFTING HAPPENS _INSIDE_ MODEL!
-        # input_ids = self.tokenizer(caption, truncation=True, return_tensors="pt").input_ids[0]
-        # labels = copy.deepcopy(input_ids)
+        # We treat image patches as "tokens = [p1 p2 p3, ...]"; we need to specify ordering of text/patch tokens.
+        #   => Critically, we find that inserting *after* the BOS token leads to the strongest performance!
+        #       - input_ids = "<s> p1 p2 p3 ... <caption_text> \n"
+        #       - labels = "IGNORE IGNORE ..." (copy `input_ids` replacing <s> and p{1...K} with IGNORE)
+        #
+        # IMPORTANT => IF WE'RE USING HF LLM.forward(... labels=labels), SHIFTING HAPPENS _INSIDE_ MODEL!
+        input_ids = self.tokenizer(caption, truncation=True, return_tensors="pt").input_ids[0]
+        labels = copy.deepcopy(input_ids)
 
-        # # Set the <BOS> token's label to IGNORE_INDEX (since we're inserting the image patches right after)
-        # preanswer_ids = self.tokenizer(preanswer, truncation=True, return_tensors="pt").input_ids[0]
-        # labels[0] = IGNORE_INDEX
-        # labels[:len(preanswer_ids)] = IGNORE_INDEX
-
-        # 只tokenize答案部分，然后构建完整序列
-        prompts = {"in front of": "In this 3D scene, `in front of` means closer to the camera/viewer (smaller depth value). ",
-                   "behind": "In this 3D scene, `behind` means farther away from the camera/viewer (larger depth value). "}
-        q = conversation[0]["value"]
-        if self.identify_relation(q) in ["behind", "in front of"]: # special prompts for front and behind
-            question_part = prompts[self.identify_relation(q)] + "Question: " + q + "Answer:"
-        else:
-            question_part = "Question: " + conversation[0]["value"] + "Answer:"
-        # question_part = "Question: " + conversation[0]["value"] + "Answer:"
-        answer_part = conversation[-1]["value"] + self.tokenizer.eos_token
-        # 分别tokenize
-        question_ids = self.tokenizer(question_part, truncation=True, return_tensors="pt").input_ids[0]
-        answer_ids = self.tokenizer(answer_part, add_special_tokens=False, truncation=True, return_tensors="pt").input_ids[0]
-        # 组合完整序列
-        input_ids = torch.cat([question_ids, answer_ids])
-        # 构建labels：问题部分全部mask，只学习答案部分
-        labels = torch.cat([
-            torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
-            answer_ids  # 只学习答案部分
-        ])
-        print(f"Question: {question_part}, Answer: {conversation[-1]['value']}")
-        print(f"Input IDs: {input_ids}, Labels: {labels}")
+        # Set the <BOS> token's label to IGNORE_INDEX (since we're inserting the image patches right after)
+        labels[0] = IGNORE_INDEX
 
         # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
         pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
 
         return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
+    
+    # def identify_relation(self, question: str) -> str:
+    #     """ (txu) =>> Identify the spatial relation in a question.
+    #        Helper function copied from eval.py.
+    #     """
+    #     spatial_relations = ["right", "left", "behind", "in front of"]
+        
+    #     for relation in spatial_relations:
+    #         pattern = r'\b' + re.escape(relation) + r'\b'
+    #         if re.search(pattern, question.lower()):
+    #             return relation
+        
+    #     return "other"
+
+    # def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    #     """
+    #     Following the *actual* code executed from the LLaVa codebase, during the "align" phase, we actually discard
+    #     the "prompt" from the human, and instead directly predict the caption from the image.
+
+    #     As a concrete example given the "raw data" for the first example:
+    #         example = self.examples[0]["conversations"]` = {
+    #             [
+    #                 {"from": "human", "value": "Render a clear and concise summary of the photo.\n<image>"},
+    #                 {"from": "gpt", "value": "select luxury furniture 3 - inch gel memory foam mattress topper"}
+    #             ]
+    #         }
+
+    #     Return =>> self.tokenizer("<image> select luxury furniture 3 - inch gel memory foam mattress topper\n")
+
+    #     :param idx: Index to retrieve from the dataset.
+
+    #     :return: Dictionary of {"pixel_values": torch.Tensor, "input_ids": torch.Tensor, "labels": torch.Tensor}
+    #     """
+    #     image_path, conversation = Path(self.examples[idx]["image"]), self.examples[idx]["conversations"]
+    #     assert (len(conversation) == 2) and ("<image>" not in conversation[-1]["value"]), "Unexpected text!"
+
+    #     # 只tokenize答案部分，然后构建完整序列
+    #     prompts = {"in front of": "In this 3D scene, `in front of` means closer to the camera/viewer (smaller depth value). ",
+    #                "behind": "In this 3D scene, `behind` means farther away from the camera/viewer (larger depth value). "}
+    #     q = conversation[0]["value"]
+    #     if self.identify_relation(q) in ["behind", "in front of"]: # special prompts for front and behind
+    #         question_part = prompts[self.identify_relation(q)] + "Question: " + q + "Answer:"
+    #     else:
+    #         question_part = "Question: " + conversation[0]["value"] + "Answer:"
+    #     answer_part = conversation[-1]["value"] + self.tokenizer.eos_token
+    #     # 分别tokenize
+    #     question_ids = self.tokenizer(question_part, truncation=True, return_tensors="pt").input_ids[0]
+    #     answer_ids = self.tokenizer(answer_part, add_special_tokens=False, truncation=True, return_tensors="pt").input_ids[0]
+    #     # 组合完整序列
+    #     input_ids = torch.cat([question_ids, answer_ids])
+    #     # 构建labels：问题部分全部mask，只学习答案部分
+    #     labels = torch.cat([
+    #         torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
+    #         answer_ids  # 只学习答案部分
+    #     ])
+    #     print(f"Question: {question_part}, Answer: {conversation[-1]['value']}")
+    #     print(f"Input IDs: {input_ids}, Labels: {labels}")
+
+    #     # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
+    #     pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+
+    #     return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
 
     def get_modality_lengths(self, n_image_patches: int) -> List[Tuple[bool, int]]:
         """Get a list of modalities (unimodal / text-only vs. multimodal) and length of conversations per example."""
@@ -184,7 +204,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
         for turn_idx, turn in enumerate(conversation):
             # Get "effective" string added to prompt --> handle whitespace for tokenizer type!
             msg = prompt_builder.add_turn(turn["from"], turn["value"])
-            print(f"Turn: {msg}")
+            print(f"Turn: {msg}") # Printing the current conversation turn ---> debugging purpose
 
             # Llama Tokenizer (Fast) adds extra character if a string ends in whitespace --> strip if non-empty!
             if isinstance(self.tokenizer, LlamaTokenizerFast):
@@ -217,6 +237,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
         input_ids, labels = input_ids[: self.tokenizer.model_max_length], labels[: self.tokenizer.model_max_length]
 
         # === Handle "unimodal" (language-only) vs. "multimodal" ===
+        # (txu) ==> this is automatic handling according to whether the data has image or not
         if "image" in self.examples[idx]:
             image_path = Path(self.examples[idx]["image"])
 

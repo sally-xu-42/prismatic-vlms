@@ -56,6 +56,7 @@ class ResumablePretrainConfig:
     run_id: Optional[str] = None                                    # Run ID for logging, Weights & Biases
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
     seed: int = 7                                                   # Random seed (for reproducibility)
+    reset_for_new_stage: Optional[bool] = False                               # Whether to reset epoch/step counters when starting a new stage
 
     # HF Hub Credentials (for any gated models)
     hf_token: Union[str, Path] = Path(".hf_token")                  # Environment variable or Path to HF Token
