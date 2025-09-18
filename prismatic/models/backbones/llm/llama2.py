@@ -63,9 +63,9 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
         use_flash_attention_2: bool = False,
         enable_peft = True, #      <<<<<<<<<<<<<<<         ################### set this to True for finetune stage #######################
         lora_config = LoraConfig(
-            r=128, 
-            lora_alpha=256, 
-            lora_dropout=0.05,
+            r=32, # <-- Changed from 128 to 32 for faster training
+            lora_alpha=64, # <-- Should be 2x the rank (32 * 2 = 64)
+            lora_dropout=0.1, # <-- Higher dropout for finetune stage
             bias="none",
             target_modules= [
                 "qkv_proj",

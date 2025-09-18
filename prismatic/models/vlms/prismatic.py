@@ -158,10 +158,11 @@ class PrismaticVLM(VLM):
 
             # Explicitly Log Frozen / Unfrozen Components
             overwatch.info(f"[Frozen]    🥶 =>> Vision Backbone `{self.vision_backbone.identifier}`", ctx_level=1)
-            overwatch.info(f"[TRAINABLE] 🔥 =>> LLM Backbone `{self.llm_backbone.identifier}`", ctx_level=1)
+            overwatch.info(f"[Frozen]    🥶 =>> LLM Backbone `{self.llm_backbone.identifier}`", ctx_level=1)
+            overwatch.info(f"[TRAINABLE] 🔥 =>> LoRA Adapter `{self.llm_backbone.identifier}`", ctx_level=1)
             overwatch.info(f"[TRAINABLE] 🔥 =>> Projector `{self.arch_specifier}`", ctx_level=1)
 
-        elif stage == "full-finetune":
+        elif stage == "full-finetune": # ---------------->>  Full Finetuning including vision encoder
             self.vision_backbone.dtype = torch.float32
             self.vision_backbone.requires_grad_(True)
             self.llm_backbone.requires_grad_(True)

@@ -137,7 +137,7 @@ class Metrics:
             "step_time": deque(maxlen=window_size),
             "lr": [],
             # Sally: Add more metrics as needed
-            "validation_loss": deque(maxlen=window_size),
+            # "validation_loss": deque(maxlen=window_size),
         }
 
     def log(self, global_step: int, metrics: Dict[str, Union[int, float]]) -> None:
@@ -192,7 +192,7 @@ class Metrics:
         step_time, lr = np.mean(list(self.state["step_time"])), self.state["lr"][-1]
         status = self.get_status(loss)
         # Sally: Push self-defined metrics
-        validation_loss = torch.stack(list(self.state["validation_loss"])).mean().item() if len(self.state["validation_loss"]) > 0 else 0.0
+        # validation_loss = torch.stack(list(self.state["validation_loss"])).mean().item() if len(self.state["validation_loss"]) > 0 else 0.0
 
         # Fire to Trackers
         prefix = self.stage.capitalize()
@@ -205,7 +205,7 @@ class Metrics:
                 f"{prefix}/Learning Rate": lr,
                 f"{prefix}/Step Time": step_time,
                 # Sally: Log self-defined metrics
-                f"{prefix}/Validation Loss": validation_loss,
+                # f"{prefix}/Validation Loss": validation_loss,
             },
         )
         return status
