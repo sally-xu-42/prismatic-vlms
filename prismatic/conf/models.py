@@ -521,11 +521,6 @@ class LLaVa_v15_Reproduction_7B_LORA(LLaVa_v15_Reproduction_7B):
     model_id: str = "reproduction-llava-v15+7b-lora"
     # All other settings inherit from LLaVa_v15_Reproduction_7B
     # LoRA will be enabled automatically through the Llama2 backbone
-    # Stabilize finetune training
-    finetune_learning_rate: float = 5e-6  # Much smaller LR
-    finetune_per_device_batch_size: int = 8  # Smaller batch
-    finetune_max_grad_norm: float = 0.5  # Stronger gradient clipping
-    finetune_warmup_ratio: float = 0.1  # More warmup
 
 # === Define a Model Registry Enum for Reference & Validation ===
 @unique
