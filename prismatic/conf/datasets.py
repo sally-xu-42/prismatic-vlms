@@ -59,7 +59,7 @@ class LLaVa_Multimodal_Only_Config(DatasetConfig):
         Path("download/llava-v1.5-instruct/llava_v1_5_stripped625k.json"),
         Path("download/llava-v1.5-instruct/"),
     )
-    dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics/prismatic-vlms/data")
 
 
 # LLaVa-v15 + LVIS-Instruct-4V
@@ -75,7 +75,7 @@ class LLaVa_LVIS4V_Config(DatasetConfig):
         Path("download/llava-v1.5-instruct/llava_v1_5_lvis4v_mix888k.json"),
         Path("download/llava-v1.5-instruct/"),
     )
-    dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics/prismatic-vlms/data")
 
 
 # LLaVa-v15 + LRV-Instruct
@@ -91,7 +91,7 @@ class LLaVa_LRV_Config(DatasetConfig):
         Path("download/llava-v1.5-instruct/llava_v1_5_lrv_mix1008k.json"),
         Path("download/llava-v1.5-instruct/"),
     )
-    dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics/prismatic-vlms/data")
 
 
 # LLaVa-v15 + LVIS-Instruct-4V + LRV-Instruct
@@ -107,7 +107,7 @@ class LLaVa_LVIS4V_LRV_Config(DatasetConfig):
         Path("download/llava-v1.5-instruct/llava_v1_5_lvis4v_lrv_mix1231k.json"),
         Path("download/llava-v1.5-instruct/"),
     )
-    dataset_root_dir: Path = Path("/mnt/fsx/skaramcheti/datasets/prismatic-vlms")
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics/prismatic-vlms/data")
 
 
 # CLEVR & Ablated CLEVR Dataset Configurations
