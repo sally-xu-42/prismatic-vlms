@@ -45,10 +45,6 @@ class ResumablePretrainConfig:
         default_factory=DatasetConfig.get_choice_class(DatasetRegistry.LLAVA_V15.dataset_id)
     )
 
-    # val_dataset: DatasetConfig = field(
-    #     default_factory=DatasetConfig.get_choice_class(DatasetRegistry.LLAVA_V15.dataset_id)
-    # )
-
     # Pretraining Stage in < align (projector-only) | finetune (projector + LLM) | full-finetune (all) >
     stage: str = "align"                                            # Pretraining Stage
     
@@ -56,7 +52,6 @@ class ResumablePretrainConfig:
     run_id: Optional[str] = None                                    # Run ID for logging, Weights & Biases
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
     seed: int = 7                                                   # Random seed (for reproducibility)
-    reset_for_new_stage: Optional[bool] = False                               # Whether to reset epoch/step counters when starting a new stage
 
     # HF Hub Credentials (for any gated models)
     hf_token: Union[str, Path] = Path(".hf_token")                  # Environment variable or Path to HF Token
@@ -67,6 +62,7 @@ class ResumablePretrainConfig:
     wandb_entity: str = "sallyxu"
 
     resume_from_checkpoint: Optional[Path] = None                   # Checkpoint to resume from (full state)
+    reset_for_new_stage: Optional[bool] = False                     # Whether to reset epoch/step counters when starting a new stage
 
     def __post_init__(self) -> None:
         """Set optimization parameters based on `stage`."""
@@ -192,16 +188,6 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
         default_image_resolution=vision_backbone.default_image_resolution,
         padding_side=tokenizer.padding_side,
     )
-    # overwatch.info(f"Loading validation dataset `{cfg.val_dataset.dataset_id}`")
-    # val_dataset, _ = get_dataset_and_collator(
-    #     cfg.stage,
-    #     cfg.val_dataset,
-    #     image_transform,
-    #     tokenizer,
-    #     prompt_builder_fn=llm_backbone.prompt_builder_fn,
-    #     default_image_resolution=vision_backbone.default_image_resolution,
-    #     padding_side=tokenizer.padding_side,
-    # )
     # Create Train Strategy
     overwatch.info(f"Initializing Train Strategy: {cfg.train_strategy}")
     train_strategy = get_train_strategy(
@@ -243,17 +229,14 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     # Run training with resumption support
     overwatch.info("Starting Training Loop")
     resume_checkpoint = cfg.resume_from_checkpoint if cfg.resume_from_checkpoint else None
+    reset_for_new_stage = cfg.reset_for_new_stage if cfg.reset_for_new_stage else False
     is_resumable_strategy = hasattr(train_strategy, 'load_checkpoint') and hasattr(train_strategy, 'resume_epoch')
     
     if is_resumable_strategy:
         overwatch.info("Using resumable training strategy")
-        # train_strategy.run_training(
-        #     resumable_dataset, val_dataset, collator, metrics, 
-        #     stage=cfg.stage, seed=cfg.seed, resume_checkpoint=resume_checkpoint
-        # )
         train_strategy.run_training(
             resumable_dataset, collator, metrics, 
-            stage=cfg.stage, seed=cfg.seed, resume_checkpoint=resume_checkpoint
+            stage=cfg.stage, seed=cfg.seed, resume_checkpoint=resume_checkpoint, reset_for_new_stage=reset_for_new_stage
         )
     else:
         overwatch.info("[WARNING] Training Strategy is Not Resumable. Stopping...")

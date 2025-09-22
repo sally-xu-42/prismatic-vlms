@@ -48,7 +48,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
         self.resume_epoch = 0
         self.resume_step = 0
         self.resume_samples_seen = 0
-        self.reset_for_new_stage = False  # Whether to reset counters for a new training stage
+        # self.reset_for_new_stage = False  # Whether to reset counters for a new training stage
     
     # def calculate_validation_loss(
     #         self,
@@ -102,12 +102,14 @@ class ResumableTrainingStrategy(TrainingStrategy):
         batch_construction_strategy: str = "split-modality",
         seed: int = 7,
         resume_checkpoint: Optional[Path] = None,
+        reset_for_new_stage: Optional[bool] = False,
     ) -> None:
         """Enhanced training loop with resumption support."""
         
         # Load checkpoint if resuming
         if resume_checkpoint:
             # Reset counters if starting a new stage
+            self.reset_for_new_stage = reset_for_new_stage
             self.load_checkpoint(resume_checkpoint)
             # Update metrics to start from correct step
             metrics.global_step = self.resume_step
