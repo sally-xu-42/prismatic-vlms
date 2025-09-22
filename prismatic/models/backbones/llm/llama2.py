@@ -68,10 +68,13 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
             lora_dropout=0.05,
             bias="none",
             target_modules= [
-                "qkv_proj",
+                "q_proj",
+                "k_proj", 
+                "v_proj",
                 "o_proj",
                 "down_proj",
-                "gate_up_proj"],
+                "gate_proj",
+                "up_proj"],
             task_type="CAUSAL_LM"
             ),
     ) -> None:
