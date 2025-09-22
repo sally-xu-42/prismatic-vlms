@@ -62,7 +62,7 @@ class ResumablePretrainConfig:
     wandb_entity: str = "sallyxu"
 
     resume_from_checkpoint: Optional[Path] = None                   # Checkpoint to resume from (full state)
-    reset_for_new_stage: Optional[bool] = False                     # Whether to reset epoch/step counters when starting a new stage
+    reset_for_new_stage: bool = field(default=False)                # Whether to reset epoch/step counters when starting a new stage
 
     def __post_init__(self) -> None:
         """Set optimization parameters based on `stage`."""
@@ -229,7 +229,7 @@ def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     # Run training with resumption support
     overwatch.info("Starting Training Loop")
     resume_checkpoint = cfg.resume_from_checkpoint if cfg.resume_from_checkpoint else None
-    reset_for_new_stage = cfg.reset_for_new_stage if cfg.reset_for_new_stage else False
+    reset_for_new_stage = cfg.reset_for_new_stage
     is_resumable_strategy = hasattr(train_strategy, 'load_checkpoint') and hasattr(train_strategy, 'resume_epoch')
     
     if is_resumable_strategy:
