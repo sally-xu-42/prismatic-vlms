@@ -236,8 +236,8 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         # Add checkpoint saving and logging every 500 steps
                         if metrics.global_step % 500 == 0:
                             self.save_checkpoint(
-                                metrics.run_dir, metrics.global_step, epoch, 
-                                loss.item(), samples_seen=samples_seen
+                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, 
+                                train_loss=loss.item(), samples_seen=samples_seen
                             )
                             status = metrics.push()
                             overwatch.info(
@@ -248,8 +248,8 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         # Check for Termination
                         if self.max_steps is not None and metrics.global_step >= self.max_steps:
                             self.save_checkpoint(
-                                metrics.run_dir, metrics.global_step, epoch, 
-                                loss.item(), samples_seen=samples_seen
+                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, 
+                                train_loss=loss.item(), samples_seen=samples_seen
                             )
                             dist.barrier()
                             return
@@ -261,7 +261,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
             # Save checkpoint at end of training
             if self.max_steps is None:
                 self.save_checkpoint(
-                    metrics.run_dir, metrics.global_step, epoch, stage,
-                    loss.item(), samples_seen=samples_seen
+                    run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch,
+                    train_loss=loss.item(), samples_seen=samples_seen
                 )
                 dist.barrier()
