@@ -236,7 +236,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         # Add checkpoint saving and logging every 500 steps
                         if metrics.global_step % 500 == 0:
                             self.save_checkpoint(
-                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, 
+                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, stage=stage,
                                 train_loss=loss.item(), samples_seen=samples_seen
                             )
                             status = metrics.push()
@@ -248,7 +248,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         # Check for Termination
                         if self.max_steps is not None and metrics.global_step >= self.max_steps:
                             self.save_checkpoint(
-                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, 
+                                run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, stage=stage,
                                 train_loss=loss.item(), samples_seen=samples_seen
                             )
                             dist.barrier()
@@ -261,7 +261,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
             # Save checkpoint at end of training
             if self.max_steps is None:
                 self.save_checkpoint(
-                    run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch,
+                    run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, stage=stage
                     train_loss=loss.item(), samples_seen=samples_seen
                 )
                 dist.barrier()

@@ -33,8 +33,8 @@ from typing import Optional, Type
 import torch
 from torch import nn as nn
 
-from transformers import Phi3ForCausalLM
-from transformers.models.phi3.modeling_phi3 import Phi3DecoderLayer
+# from transformers import Phi3ForCausalLM
+# from transformers.models.phi3.modeling_phi3 import Phi3DecoderLayer
 from peft import LoraConfig
 
 from prismatic.models.backbones.llm.base_llm import HFCausalLLMBackbone
