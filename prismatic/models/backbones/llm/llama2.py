@@ -63,18 +63,16 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
         use_flash_attention_2: bool = False,
         enable_peft = True, #      <<<<<<<<<<<<<<<         ################### set this to True for finetune stage #######################
         lora_config = LoraConfig(
-            r=32, # <-- Changed from 128 to 32 for faster training
-            lora_alpha=64, # <-- Should be 2x the rank (32 * 2 = 64)
+            r=8, # <-- Changed from 128 to 8 for faster training
+            lora_alpha=16, # <-- Should be 2x the rank (8 * 2 = 16)
             lora_dropout=0.05,
             bias="none",
             target_modules= [
                 "q_proj",
-                "k_proj", 
+                "k_proj",
                 "v_proj",
-                "o_proj",
-                "down_proj",
-                "gate_proj",
-                "up_proj"],
+                "o_proj"
+            ],  # (txu =>>) "q_proj","k_proj", "v_proj", "o_proj", "down_proj", "gate_proj", "up_proj"
             task_type="CAUSAL_LM"
             ),
     ) -> None:
