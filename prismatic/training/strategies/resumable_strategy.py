@@ -48,7 +48,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
         self.resume_epoch = 0
         self.resume_step = 0
         self.resume_samples_seen = 0
-        # self.reset_for_new_stage = False  # Whether to reset counters for a new training stage
+        self.reset_for_new_stage = False  # Default to False: Whether to reset counters for a new training stage
     
     # def calculate_validation_loss(
     #         self,
