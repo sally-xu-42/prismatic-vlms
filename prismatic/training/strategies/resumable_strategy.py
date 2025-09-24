@@ -261,7 +261,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
             # Save checkpoint at end of training
             if self.max_steps is None:
                 self.save_checkpoint(
-                    run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, stage=stage
+                    run_dir=metrics.run_dir, global_step=metrics.global_step, epoch=epoch, stage=stage,
                     train_loss=loss.item(), samples_seen=samples_seen
                 )
                 dist.barrier()
