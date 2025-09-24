@@ -62,7 +62,7 @@ class ResumablePretrainConfig:
     wandb_entity: str = "sallyxu"
 
     resume_from_checkpoint: Optional[Path] = None                   # Checkpoint to resume from (full state)
-    reset_for_new_stage: bool = field(default=False)                # Whether to reset epoch/step counters when starting a new stage
+    reset_for_new_stage: Optional[bool] = field(default=False)      # Whether to reset epoch/step counters when starting a new stage
 
     def __post_init__(self) -> None:
         """Set optimization parameters based on `stage`."""
