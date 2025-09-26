@@ -605,7 +605,7 @@ class PrismaticVLM(VLM):
             
             # Get logits and calculate candidate probability
             print(f"[Debug] output = {output.scores}")
-            print(f"[Debug] output shape = {output.scores.shape}")
+            print(f"[Debug] output shape = {len(output.scores[0][0])}")
             logits = output.scores[0][0]  # Shape: [vocab_size]
             print(f"[Debug] logits = {logits[:10]}")
             
