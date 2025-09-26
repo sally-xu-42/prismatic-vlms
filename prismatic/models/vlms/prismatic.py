@@ -615,7 +615,7 @@ class PrismaticVLM(VLM):
             # Calculate log probabilities
             log_prob = torch.log_softmax(logits, dim=-1)
             lp = log_prob[cand_ids].sum()
-            print(f"[Debug] negative log probability = {0-lp}")
+            print(f"[Debug] log probability = {lp}")
             scores.append(lp.item())
         
         # Return best candidate and all scores
