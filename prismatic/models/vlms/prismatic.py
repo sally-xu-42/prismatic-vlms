@@ -600,7 +600,6 @@ class PrismaticVLM(VLM):
                     return_dict_in_generate=True,
                     output_scores=True,
                     use_cache=False,
-                    max_new_tokens=1,
                     **kwargs
                 )
             
