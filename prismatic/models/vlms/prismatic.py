@@ -608,8 +608,8 @@ class PrismaticVLM(VLM):
             print(f"[Debug] logits = {logits[:10]}")
             
             # Get candidate token IDs
-            cand_ids = tokenizer(" " + cand, add_special_tokens=False).input_ids
-            print(f"[Debug] cand_ids = {cand_ids}")
+            cand_ids = tokenizer(cand, add_special_tokens=False).input_ids
+            print(f"[Debug] cand_ids = {cand_ids}") # Yes: 4874, No: 694
             cand_ids = torch.tensor(cand_ids, device=self.device)
             
             # Calculate log probabilities
