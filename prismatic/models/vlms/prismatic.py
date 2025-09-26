@@ -605,15 +605,17 @@ class PrismaticVLM(VLM):
             
             # Get logits and calculate candidate probability
             logits = output.scores[0][0]  # Shape: [vocab_size]
-            print(f"[Debug] logits = {logits.shape}")
+            print(f"[Debug] logits = {logits[:10]}")
             
             # Get candidate token IDs
             cand_ids = tokenizer(" " + cand, add_special_tokens=False).input_ids
+            print(f"[Debug] cand_ids = {cand_ids}")
             cand_ids = torch.tensor(cand_ids, device=self.device)
             
             # Calculate log probabilities
             log_prob = torch.log_softmax(logits, dim=-1)
             lp = log_prob[cand_ids].sum()
+            print(f"[Debug] lp = {lp}")
             scores.append(lp.item())
         
         # Return best candidate and all scores
