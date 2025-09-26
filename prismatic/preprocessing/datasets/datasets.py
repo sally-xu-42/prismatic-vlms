@@ -201,6 +201,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
 
         # Create Prompt Builder --> add each message sequentially
         prompt_builder, input_ids, labels = self.prompt_builder_fn(model_family="prismatic"), [], []
+        print(f"Conversation: {conversation} \n")
         for turn_idx, turn in enumerate(conversation):
             # Get "effective" string added to prompt --> handle whitespace for tokenizer type!
             msg = prompt_builder.add_turn(turn["from"], turn["value"])
@@ -232,6 +233,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
         # Tensorize =>> Set the <BOS> token's label to IGNORE_INDEX (since we're inserting the image patches after)
         #   - IMPORTANT => IF WE'RE USING HF LLM.forward(... labels=labels), SHIFTING HAPPENS _INSIDE_ MODEL!
         input_ids, labels = torch.tensor(input_ids), torch.tensor(labels)
+        print(f"Input IDs: {input_ids}, \n Labels: {labels}")
 
         # Handle Truncation (if necessary)
         input_ids, labels = input_ids[: self.tokenizer.model_max_length], labels[: self.tokenizer.model_max_length]
