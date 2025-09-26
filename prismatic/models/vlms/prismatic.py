@@ -620,6 +620,8 @@ class PrismaticVLM(VLM):
         
         # Return best candidate and all scores
         best_idx = int(torch.argmax(torch.tensor(scores)))
+        print(f"[Debug] best_idx = {best_idx}")
         score_dict = dict(zip(candidates, scores))
+        print(f"[Debug] output = {candidates[best_idx]}, {score_dict}")
         return candidates[best_idx], score_dict
 
