@@ -128,6 +128,22 @@ class CLEVRConfig(DatasetConfig):
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 
 @dataclass
+class CLEVRMiniConfig(DatasetConfig):
+    dataset_id: str = "clevr-mini"
+
+    # Preprocessed CLEVR dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_CLEVR/clevr_train_qa_mini_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
+    )
+    # Single-stage finetune
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_CLEVR/clevr_train_qa_mini_preprocessed.json"),
+        Path("data/CLEVR_v1.0/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
 class CLEVRValidationConfig(DatasetConfig):
     dataset_id: str = "clevr-validation"
 
@@ -191,6 +207,7 @@ class DatasetRegistry(Enum):
     CLEVR_VALIDATION = CLEVRValidationConfig
     CLEVR_FRONT_ABLATED = CLEVRFrontConfig
     CLEVR_MIXED = CLEVRMixedConfig
+    CLEVR_MINI = CLEVRMiniConfig
 
     @property
     def dataset_id(self) -> str:
