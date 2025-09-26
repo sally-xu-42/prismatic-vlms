@@ -579,7 +579,7 @@ class PrismaticVLM(VLM):
         scores = []
         for cand in candidates:
             # Create full prompt with candidate
-            full_prompt = f"{prompt_text}{cand}"
+            full_prompt = f"{prompt_text}"
             
             # Prepare inputs
             input_ids = tokenizer(full_prompt, truncation=True, return_tensors="pt").input_ids.to(self.device)
@@ -606,7 +606,7 @@ class PrismaticVLM(VLM):
             # Get logits and calculate candidate probability
             print(f"[Debug] output = {output.scores}")
             print(f"[Debug] output shape = {len(output.scores[0][0])}")
-            logits = output.scores[0][0]  # Shape: [vocab_size]
+            logits = output.scores[0][0]  # Shape: [vocab_size] = 32064
             print(f"[Debug] logits = {logits[:10]}")
             
             # Get candidate token IDs
