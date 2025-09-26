@@ -605,6 +605,7 @@ class PrismaticVLM(VLM):
             
             # Get logits and calculate candidate probability
             logits = output.scores[0][0]  # Shape: [vocab_size]
+            print(f"[Debug] logits = {logits.shape}")
             
             # Get candidate token IDs
             cand_ids = tokenizer(" " + cand, add_special_tokens=False).input_ids
