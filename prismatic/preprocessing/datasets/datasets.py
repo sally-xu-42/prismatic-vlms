@@ -140,10 +140,13 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         # 组合完整序列
         input_ids = torch.cat([question_ids, answer_ids])
         # 构建labels：问题部分全部mask，只学习答案部分
-        labels = torch.cat([
-            torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
-            answer_ids  # 只学习答案部分
-        ])
+        # labels = torch.cat([
+        #     torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
+        #     answer_ids  # 只学习答案部分
+        # ])
+        # mini experiment
+        labels = copy.deepcopy(input_ids)
+        labels[0] = IGNORE_INDEX
         print(f"Question: {question_part}, Answer: {conversation[-1]['value']}")
         print(f"Input IDs: {input_ids}, Labels: {labels}")
 
