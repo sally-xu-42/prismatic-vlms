@@ -205,6 +205,15 @@ class ResumableTrainingStrategy(TrainingStrategy):
                             multimodal_indices=batch["multimodal_indices"],
                         )
                         loss = output.loss
+                        print(f"logits shape: {output.logits.shape}")
+                        # Print logits for the last few tokens (where the model is predicting)
+                        last_token_logits = output.logits[0, -1, :]  # [vocab_size]
+                        top_k_logits, top_k_indices = torch.topk(last_token_logits, k=5)
+                        print(f"Top 5 logits for last token: {top_k_logits}")
+                        print(f"Top 5 token IDs: {top_k_indices}")
+                        # Decode the top tokens to see what the model is predicting
+                        # top_tokens = [self.tokenizer.decode([idx]) for idx in top_k_indices]
+                        # print(f"Top 5 tokens: {top_tokens}")
 
                     # Track samples processed
                     batch_size = batch["input_ids"].size(0)
