@@ -76,6 +76,7 @@ class WeightsBiasesTracker:
             project=self.project,
             entity=self.entity,
             group=self.group,
+            resume="allow",
         )
 
     @overwatch.rank_zero_only
