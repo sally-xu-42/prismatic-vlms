@@ -576,44 +576,52 @@ class PrismaticVLM(VLM):
         # For now, only support generation with a batch size of 1 for simplicity
         image_transform, tokenizer = self.vision_backbone.image_transform, self.llm_backbone.tokenizer
 
-        scores = []
-        for cand in candidates:
-            # Create full prompt with candidate
-            full_prompt = f"{prompt_text}"
-            
-            # Prepare inputs
-            input_ids = tokenizer(full_prompt, truncation=True, return_tensors="pt").input_ids.to(self.device)
-            pixel_values = image_transform(image)
-            if isinstance(pixel_values, torch.Tensor):
-                pixel_values = pixel_values[None, ...].to(self.device)
-            elif isinstance(pixel_values, dict):
-                pixel_values = {k: v[None, ...].to(self.device) for k, v in pixel_values.items()}
-            else:
-                raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
+        scores = []          
+        # Prepare inputs
+        input_ids = tokenizer(prompt_text, truncation=False, return_tensors="pt").input_ids.to(self.device)
+        pixel_values = image_transform(image)
+        if isinstance(pixel_values, torch.Tensor):
+            pixel_values = pixel_values[None, ...].to(self.device)
+        elif isinstance(pixel_values, dict):
+            pixel_values = {k: v[None, ...].to(self.device) for k, v in pixel_values.items()}
+        else:
+            raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
 
-            # Generate with scoring enabled
-            autocast_dtype = self.llm_backbone.half_precision_dtype
-            with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
-                output = super().generate(
-                    input_ids=input_ids,
-                    pixel_values=pixel_values,
-                    return_dict_in_generate=True,
-                    output_scores=True,
-                    use_cache=False,
-                    **kwargs
-                )
+        autocast_dtype = self.llm_backbone.half_precision_dtype
+        print(f"[Debug] autocast_dtype = {autocast_dtype}")
+        # with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
+        #     print(f"[Debug] input_ids: {input_ids}")
+        #     out = self.forward(input_ids=input_ids, 
+        #                    pixel_values=pixel_values, 
+        #                    use_cache=False)
+        #     logits_last = out.logits[0, -1, :]
+        #     print(f"[Debug] logits shape = {out.logits.shape}") # [32064]
+        #     top_k_logits, top_k_indices = torch.topk(logits_last, k=5)
+        #     print(f"Top 5 logits for last token: {top_k_logits}")
+        #     print(f"Top 5 token IDs: {top_k_indices}")
+        #     import sys
+        #     sys.exit(0)
+        with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
+            output = super().generate(
+                input_ids=input_ids,
+                pixel_values=pixel_values,
+                return_dict_in_generate=True,
+                output_scores=True,
+                output_logits=True,
+                use_cache=False,
+                **kwargs
+            )
             
-            # Get logits and calculate candidate probability
-            print(f"[Debug] output = {output.scores}")
-            print(f"[Debug] output shape = {len(output.scores[0][0])}")
-            logits = output.scores[0][0]  # Shape: [vocab_size] = 32064
-            print(f"[Debug] logits = {logits[:10]}")
-            
+        # Get logits and calculate candidate probability
+        print(f"[Debug] output = {output}")
+        logits = output.logits[0][0]  # Shape: [vocab_size] = 32064  
+
+        for cand in candidates: 
             # Get candidate token IDs
             cand_ids = tokenizer(cand, add_special_tokens=False).input_ids
             print(f"[Debug] cand_ids = {cand_ids}") # Yes: 3869, No: 1939, yes: 4874, no: 694
             cand_ids = torch.tensor(cand_ids, device=self.device)
-            
+            print(f"[Debug] logits: {logits[cand_ids]}")
             # Calculate log probabilities
             log_prob = torch.log_softmax(logits, dim=-1)
             lp = log_prob[cand_ids].sum()
@@ -626,4 +634,45 @@ class PrismaticVLM(VLM):
         score_dict = dict(zip(candidates, scores))
         print(f"[Debug] output = {candidates[best_idx]}, {score_dict}")
         return candidates[best_idx], score_dict
+
+    # @torch.inference_mode()
+    # def candidate_scoring(self, image, prompt_text, candidates, *, use_amp=False):
+    #     self.vlm.eval()  # disable dropout, etc.
+
+    #     image_transform, tokenizer = self.vision_backbone.image_transform, self.llm_backbone.tokenizer
+
+    #     # ---- Build inputs (match training prompt/template exactly!) ----
+    #     # If you normally use a prompt builder / special tokens, do it here too.
+    #     input_ids = tokenizer(prompt_text, return_tensors="pt", add_special_tokens=True).input_ids.to(self.device)
+
+    #     pix = image_transform(image)
+    #     if isinstance(pix, torch.Tensor):
+    #         pix = pix.unsqueeze(0).to(self.device)
+    #     elif isinstance(pix, dict):
+    #         pix = {k: v.unsqueeze(0).to(self.device) for k, v in pix.items()}
+    #     else:
+    #         raise ValueError(f"Unsupported pixel_values type = {type(pix)}")
+
+    #     # ---- Forward once; grab last-step logits BEFORE any generation post-processing ----
+    #     autocast_dtype = self.llm_backbone.half_precision_dtype
+    #     ctx = torch.autocast("cuda", dtype=autocast_dtype, enabled=use_amp)
+    #     with ctx:
+    #         out = self.vlm(input_ids=input_ids, pixel_values=pix, use_cache=False)
+    #         # out.logits: [B, T, V]
+    #         logits_last = out.logits[:, -1, :].squeeze(0)  # [V]
+
+    #     # ---- Score candidates from the SAME distribution ----
+    #     log_prob = torch.log_softmax(logits_last, dim=-1)  # [V]
+    #     scores = []
+    #     for cand in candidates:
+    #         ids = tokenizer(cand, add_special_tokens=False).input_ids
+    #         if len(ids) == 0:
+    #             scores.append(float("-inf"))
+    #             continue
+    #         lp = log_prob[torch.tensor(ids, device=log_prob.device)].sum()
+    #         scores.append(lp.item())
+
+    #     best_idx = int(torch.tensor(scores).argmax())
+    #     return candidates[best_idx], dict(zip(candidates, scores))
+
 

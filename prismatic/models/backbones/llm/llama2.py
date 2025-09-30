@@ -65,7 +65,7 @@ class LLaMa2LLMBackbone(HFCausalLLMBackbone):
         lora_config = LoraConfig(
             r=8, # <-- Changed from 128 to 8 for faster training
             lora_alpha=16, # <-- Should be 2x the rank (8 * 2 = 16)
-            lora_dropout=0.05,
+            lora_dropout=0.0,
             bias="none",
             target_modules= [
                 "q_proj",
