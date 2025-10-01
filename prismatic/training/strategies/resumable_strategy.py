@@ -30,7 +30,6 @@ from prismatic.util.data_utils import PaddedCollatorForLanguageModeling
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 sys.path.insert(0, str("/share/data/speech/txu/vlm_semantics"))
-# from src import EvalDataset, PaddedCollatorForEval, get_dataset_and_collator
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -49,53 +48,10 @@ class ResumableTrainingStrategy(TrainingStrategy):
         self.resume_step = 0
         self.resume_samples_seen = 0
         self.reset_for_new_stage = False  # Default to False: Whether to reset counters for a new training stage
-    
-    # def calculate_validation_loss(
-    #         self,
-    #         val_dataset: Dataset,
-    #         collator: PaddedCollatorForLanguageModeling,
-    #         seed: int = 7
-    # ) -> torch.Tensor:
-    #     """Calculate validation loss during training."""
-    #     sampler = DistributedSampler(
-    #         val_dataset,
-    #         num_replicas=overwatch.world_size(),
-    #         rank=overwatch.rank(),
-    #         shuffle=True,
-    #         seed=seed,
-    #         drop_last=False,
-    #     )
-    #     dataloader = DataLoader(
-    #         val_dataset,
-    #         batch_size=self.per_device_batch_size,
-    #         sampler=sampler,
-    #         collate_fn=collator,
-    #         num_workers=2,
-    #         worker_init_fn=self.worker_init_fn,
-    #     )
-    #     self.vlm.eval()
-    #     # validtion loss over a random batch
-    #     with torch.no_grad():
-    #         for batch in dataloader:
-    #             with torch.autocast(
-    #                 "cuda",
-    #                 dtype=self.mixed_precision_dtype,
-    #                 enabled=self.enable_mixed_precision_training,
-    #             ):
-    #                 output: CausalLMOutputWithPast = self.vlm(
-    #                     input_ids=batch["input_ids"],
-    #                     attention_mask=batch["attention_mask"],
-    #                     pixel_values=batch["pixel_values"],
-    #                     labels=batch["labels"],
-    #                     multimodal_indices=batch["multimodal_indices"],
-    #                 )
-    #                 loss = output.loss
-    #                 return loss
 
     def run_training(
         self,
         dataset: Dataset,
-        # val_dataset: Dataset,
         collator: PaddedCollatorForLanguageModeling,
         metrics: Metrics,
         stage: str = "finetune",
@@ -207,14 +163,11 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         loss = output.loss
                         print(f"Input ids shape: {batch['input_ids'][0].shape}")
                         print(f"logits shape: {output.logits.shape}")
-                        # Print logits for the last few tokens (where the model is predicting)
+                        # Print logits for the token where the model is predicting
                         last_token_logits = output.logits[0, -3, :]  # [vocab_size]
                         top_k_logits, top_k_indices = torch.topk(last_token_logits, k=5)
                         print(f"Top 5 logits for last token: {top_k_logits}")
                         print(f"Top 5 token IDs: {top_k_indices}")
-                        # Decode the top tokens to see what the model is predicting
-                        # top_tokens = [self.tokenizer.decode([idx]) for idx in top_k_indices]
-                        # print(f"Top 5 tokens: {top_tokens}")
 
                     # Track samples processed
                     batch_size = batch["input_ids"].size(0)

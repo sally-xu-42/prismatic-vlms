@@ -111,6 +111,7 @@ class TrainingStrategy(ABC):
         seed: int = 7,
     ) -> None:
         """Run the training loop for the given `dataset` and `collator`; log losses, results to `metrics`"""
+        # =>> This is overridden in the ResumableTrainingStrategy
         if "finetune" in stage and batch_construction_strategy == "split-modality":
             # Instantiate the split-modality sampler; if you want to extend with other batch construction schemes,
             #   (e.g., grouping by length) =>> can easily add them here!
@@ -187,8 +188,6 @@ class TrainingStrategy(ABC):
                             multimodal_indices=batch["multimodal_indices"],
                         )
                         loss = output.loss
-                        # print(f"Input IDs: {batch['input_ids']}, Labels: {batch['labels']}")
-                        # break
 
                     # Commit Loss (Prior to Gradient Accumulation Normalization)
                     metrics.commit(loss=loss)
