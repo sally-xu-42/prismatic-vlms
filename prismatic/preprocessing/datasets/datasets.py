@@ -258,6 +258,7 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
 
         else:
             # No image --> return `pixel_values` = None; Collator will do the smart batch handling for us!
+            print(f"Warning: No image found for idx={idx}, returning `pixel_values=None`!")
             return dict(pixel_values=None, input_ids=input_ids, labels=labels)
 
     def get_modality_lengths(self) -> List[Tuple[bool, int]]:
