@@ -41,9 +41,8 @@ class PrecomputeConfig:
     )
     
     # Output directory for saved representations
-    output_dir: Path = Path("/share/data/speech/vlm_semantics/data/vision_features")
-    batch_size: int = 24
-    chunk_size: int = 10000
+    output_dir: Path = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+    chunk_size: int = 1000
 
     # HF Hub Credentials (for any gated models)
     hf_token: Union[str, Path] = Path(".hf_token")
@@ -91,7 +90,6 @@ def write_metadata(cfg: PrecomputeConfig) -> None:
             "vision_backbone_id": cfg.model.vision_backbone_id,
             "image_resize_strategy": cfg.model.image_resize_strategy,
         },
-        "batch_size": cfg.batch_size,
         "device": cfg.device,
         "output_dir": str(cfg.output_dir),
     }
@@ -106,7 +104,7 @@ def write_metadata(cfg: PrecomputeConfig) -> None:
 def process_chunk(chunk_id: int) -> None:
     """Process a single chunk of data."""
     
-    metadata_file = Path("/share/data/speech/vlm_semantics/data/vision_features/array_job_metadata.json")
+    metadata_file = Path("/share/data/speech/txu/vlm_semantics/data/vision_features/array_job_metadata.json")
     if not metadata_file.exists():
         write_metadata()
     with open(metadata_file, "r") as f:
@@ -134,74 +132,28 @@ def process_chunk(chunk_id: int) -> None:
     vision_backbone = vision_backbone.to(device)
     vision_backbone.eval()
     
-    chunk_features, chunk_ids, chunk_paths, chunk_conversations = [], [], [], []
-    batch_images, batch_ids, batch_paths, batch_conversations = [], [], [], []
-    
     image_base_dir = Path(metadata["image_base_dir"])
-    batch_size = metadata["batch_size"]
     
     with torch.no_grad():
-        for idx, example in enumerate(tqdm(chunk_examples, desc=f"Chunk {chunk_id}")):
+        for _, example in enumerate(tqdm(chunk_examples, desc=f"Chunk {chunk_id}")):
             image_path = Path(example["image"])
             full_image_path = image_base_dir / image_path
-            
             try:
                 image = Image.open(full_image_path).convert("RGB")
-                pixel_values = image_transform(image)
-                
-                batch_images.append(pixel_values)
-                batch_ids.append(example.get("id", f"example_{start_idx + idx}"))
-                batch_paths.append(str(image_path))
-                batch_conversations.append(example["conversations"])
-                
+                pixel_values = image_transform(image) 
+                pixel_values = {k: v.unsqueeze(0) for k, v in pixel_values.items()}
+                patch_features = vision_backbone(pixel_values).cpu()
+                print(patch_features.shape)
+                output_file = Path(metadata["output_dir"]) / f"{image_path}.pt"
+                torch.save(patch_features, output_file)
             except Exception as e:
                 overwatch.warning(f"Failed to process image {full_image_path}: {e}")
                 continue
-            
-            if len(batch_images) >= batch_size or idx == len(chunk_examples) - 1:
-                if len(batch_images) > 0:
-                    if isinstance(batch_images[0], dict):
-                        batch_pixel_values = {
-                            k: torch.stack([img[k] for img in batch_images]).to(device)
-                            for k in batch_images[0].keys()
-                        }
-                    else:
-                        batch_pixel_values = torch.stack(batch_images).to(device)
-                    
-                    patch_features = vision_backbone(batch_pixel_values)
-                    
-                    for i, (example_id, img_path, conversation) in enumerate(zip(batch_ids, batch_paths, batch_conversations)):
-                        chunk_features.append(patch_features[i].cpu())
-                        chunk_ids.append(example_id)
-                        chunk_paths.append(img_path)
-                        chunk_conversations.append(conversation)
-                    
-                    batch_images = []
-                    batch_ids = []
-                    batch_paths = []
-                    batch_conversations = []
-    
-    output_dir = Path(metadata["output_dir"])
-    chunk_file = output_dir / f"chunk_{chunk_id:04d}.pt"
-    
-    chunk_data = {
-        "patch_features": torch.stack(chunk_features),
-        "ids": chunk_ids,
-        "image_paths": chunk_paths,
-        "conversations": chunk_conversations,
-        "chunk_info": {
-            "chunk_id": chunk_id,
-            "start_idx": start_idx,
-            "end_idx": end_idx - 1,
-            "num_examples": len(chunk_features),
-        }
-    }
-    
-    torch.save(chunk_data, chunk_file)
-    overwatch.info(f"Saved chunk {chunk_id} to {chunk_file}")
-    overwatch.info(f"Processed {len(chunk_features)} examples in chunk {chunk_id}")
+
+    overwatch.info(f"Processed {len(chunk_examples)} examples in chunk {chunk_id}")
 
 
 if __name__ == "__main__":
     chunk_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
+    # write_metadata()
     process_chunk(chunk_id)

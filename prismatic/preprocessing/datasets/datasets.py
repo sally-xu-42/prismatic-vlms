@@ -151,9 +151,16 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         print(f"Input IDs: {input_ids}, Labels: {labels}")
 
         # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
-        pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+        try:
+            self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+            patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
+            pixel_values = None
+        except Exception as e:
+            print(f"Error loading image features from {self.precompute_dir / image_path}.pt: {e}")
+            pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+            patch_features = None
 
-        return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
+        return dict(pixel_values=pixel_values, patch_features=patch_features, input_ids=input_ids, labels=labels)
 
     def get_modality_lengths(self, n_image_patches: int) -> List[Tuple[bool, int]]:
         """Get a list of modalities (unimodal / text-only vs. multimodal) and length of conversations per example."""
@@ -250,12 +257,16 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
             labels[0] = IGNORE_INDEX
 
             # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
-            pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
-
+            try:
+                self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+                patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
+                pixel_values = None
+            except Exception as e:
+                print(f"Error loading image features from {self.image_dir / image_path}.pt: {e}")
+                pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+                patch_features = None
             print(f"Input IDs: {input_ids}, \n Labels: {labels}")
-
-            return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
-
+            return dict(pixel_values=pixel_values, patch_features=patch_features, input_ids=input_ids, labels=labels)
         else:
             # No image --> return `pixel_values` = None; Collator will do the smart batch handling for us!
             print(f"Warning: No image found for idx={idx}, returning `pixel_values=None`!")
