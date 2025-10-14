@@ -8,6 +8,7 @@ The 'save_checkpoint' and 'load_checkpoint' methods are in the specific training
 
 import json
 import os
+import multiprocessing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -26,6 +27,7 @@ from prismatic.util import set_global_seed
 
 # Disable Tokenizers Parallelism to Play Nice w/ PyTorch Multiprocessing DataLoaders
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["WORLD_SIZE"] = "4"
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -125,6 +127,7 @@ class ResumableDataset:
 def resumable_pretrain(cfg: ResumablePretrainConfig) -> None:
     # print(f"DEBUG: cfg.resume_from_checkpoint = {cfg.resume_from_checkpoint}")
     overwatch.info("Resumable Prismatic VLM Training :: Gathering Light")
+    multiprocessing.set_start_method('spawn', force=True)
 
     # Setup distributed training
     torch.cuda.set_device(device_id := (overwatch.local_rank()))

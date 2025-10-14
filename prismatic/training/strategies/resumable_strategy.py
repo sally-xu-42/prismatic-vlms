@@ -134,6 +134,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                 self.vlm.train()
                 sampler.set_epoch(epoch)
                 self.optimizer.zero_grad()
+                overwatch.info(f"Starting epoch {epoch}...")
 
                 # Calculate batches to skip if resuming mid-epoch
                 batch_skip_count = 0
@@ -144,19 +145,23 @@ class ResumableTrainingStrategy(TrainingStrategy):
 
                 for train_idx, batch in enumerate(dataloader):
                     # Skip batches if resuming mid-epoch
+                    # TODO: This is very inefficient if resumed in mid-epoch; temporary workaround
                     if epoch == self.resume_epoch and train_idx < batch_skip_count:
                         continue
-
+                    # print(f"[Debug] patch_features before training loop: {batch['patch_features']}") # ===================>> support for precomputed patch features
                     # Forward pass (same as base class)
                     with torch.autocast(
                         "cuda",
                         dtype=self.mixed_precision_dtype,
                         enabled=self.enable_mixed_precision_training,
                     ):
+                        # print(f"[Debug] patch_features in training loop: {batch['patch_features']}") # ===================>> support for precomputed patch features
                         output: CausalLMOutputWithPast = self.vlm(
                             input_ids=batch["input_ids"],
                             attention_mask=batch["attention_mask"],
                             pixel_values=batch["pixel_values"],
+                            # image_file_names=batch["image_file_names"], # ===================>> support for precomputed patch features
+                            patch_features=batch["patch_features"], # ===================>> support for precomputed patch features
                             labels=batch["labels"],
                             multimodal_indices=batch["multimodal_indices"],
                         )

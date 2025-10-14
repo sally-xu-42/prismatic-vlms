@@ -151,14 +151,16 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         print(f"Input IDs: {input_ids}, Labels: {labels}")
 
         # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
-        try:
-            self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
-            patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
-            pixel_values = None
-        except Exception as e:
-            print(f"Error loading image features from {self.precompute_dir / image_path}.pt: {e}")
-            pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
-            patch_features = None
+        # try:
+        self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+        print(f"Loading image features from {self.precompute_dir / image_path}.pt")
+        patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
+        print(f"patch features:\n {patch_features}")
+        pixel_values = None
+        # except Exception as e:
+        #     print(f"Error loading image features from {self.precompute_dir / image_path}.pt: {e}")
+        #     pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+        #     patch_features = None
 
         return dict(pixel_values=pixel_values, patch_features=patch_features, input_ids=input_ids, labels=labels)
 
@@ -257,16 +259,19 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
             labels[0] = IGNORE_INDEX
 
             # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
+            # pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+            # patch_features = None
+            # image_file_name = str(image_path)
+            # print(f"Image file name: {image_file_name}")
+            # image_path = Path("train/CLEVR_train_023815.png") # debugging purpose
+            self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+            # print(f"Loading image features from {self.precompute_dir / image_path}.pt")
             try:
-                self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
-                patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
-                pixel_values = None
-            except Exception as e:
-                print(f"Error loading image features from {self.image_dir / image_path}.pt: {e}")
-                pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
-                patch_features = None
-            print(f"Input IDs: {input_ids}, \n Labels: {labels}")
-            return dict(pixel_values=pixel_values, patch_features=patch_features, input_ids=input_ids, labels=labels)
+                patch_features = torch.load(f"{self.precompute_dir / image_path}.pt", map_location="cuda")
+            except EOFError as e:
+                print(f"[DEBUG]: Caught EOFError while loading {self.precompute_dir / image_path}.pt: {e}")
+                sys.exit(0)
+            return dict(pixel_values=None, patch_features=patch_features, input_ids=input_ids, labels=labels)
         else:
             # No image --> return `pixel_values` = None; Collator will do the smart batch handling for us!
             print(f"Warning: No image found for idx={idx}, returning `pixel_values=None`!")

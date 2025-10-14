@@ -95,7 +95,8 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
                     "epoch": epoch,
                     "global_step": global_step,
                     "samples_seen": samples_seen,
-                    "rng_state": torch.get_rng_state(),
+                    "rng_state_cpu": torch.get_rng_state(),
+                    "rng_state_cuda": torch.cuda.get_rng_state_all(),
                     "train_loss": train_loss,
                 }
                 # Save Checkpoint & Copy Latest to `latest-checkpoint.pt`
@@ -145,9 +146,20 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
             self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
         
         # Restore RNG state
-        if "rng_state" in checkpoint:
-            torch.set_rng_state(checkpoint["rng_state"])
-        
+        # print(checkpoint['rng_state_cpu'])
+        # print(checkpoint['rng_state_cpu'].shape, checkpoint['rng_state_cpu'].dtype)
+        # print(checkpoint['rng_state_cuda'][0])
+        # print(len(checkpoint['rng_state_cuda']), checkpoint['rng_state_cuda'][0].shape, checkpoint['rng_state_cuda'][0].dtype)
+        torch.set_rng_state(checkpoint["rng_state_cpu"].cpu())
+        if checkpoint.get("rng_state_cuda") is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all([t.to("cpu") for t in checkpoint["rng_state_cuda"]])
+        # if "rng_state" in checkpoint:
+        #     for _ in range(torch.cuda.device_count()):
+        #         # Use torch.cuda.set_rng_state to set the state on each device
+        #         rng_state = checkpoint['rng_state'].byte().to('cpu')
+        #         print(rng_state)
+        #     torch.cuda.set_rng_state(rng_state)
+
         # Set resumption state
         if not self.reset_for_new_stage:
             self.resume_epoch = checkpoint.get("epoch", 0)
@@ -157,9 +169,6 @@ class ResumableFSDPStrategy(ResumableTrainingStrategy, FSDPStrategy):
             self.resume_epoch, self.resume_step, self.resume_samples_seen = 0, 0, 0
         
         overwatch.info(f"Resumed FSDP from: epoch={self.resume_epoch}, step={self.resume_step}, samples={self.resume_samples_seen}")
-        overwatch.info(f"Ended!")
-        import sys
-        sys.exit(0)
         
         return {
             "epoch": self.resume_epoch,

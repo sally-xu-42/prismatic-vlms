@@ -123,6 +123,7 @@ class CLEVRConfig(DatasetConfig):
     # Single-stage finetune
     finetune_stage_components: Tuple[Path, Path] = (
         Path("data/preprocessed_CLEVR/clevr_train_qa_preprocessed.json"),
+        # Path("data/preprocessed_CLEVR/clevr_train_qa_preprocessed_filtered.json"),
         Path("data/CLEVR_v1.0/images/"),
     )
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")

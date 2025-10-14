@@ -270,6 +270,7 @@ class PrismaticVLM(VLM):
 
         # Handle Inference (leverage cache, short-circuit on just LLM forward)
         if input_ids.shape[1] == 1 and past_key_values is not None:
+            print("[Debug] Using cache for generation!")
             # We're leveraging the cache, so just redirect to `self.llm_backbone` with `input_ids` and `past_key_values`
             output = self.llm_backbone(
                 input_ids=input_ids,
@@ -285,15 +286,17 @@ class PrismaticVLM(VLM):
             )
             return output
 
-        elif input_ids.shape[1] == 1 or pixel_values is None:
-            raise RuntimeError("Invalid `forward()` call!")
+        # elif input_ids.shape[1] == 1 or pixel_values is None:
+        #     raise RuntimeError("Invalid `forward()` call!")
 
         # Handle Multimodal Indices is None --> pretend like the batch is fully multimodal (always image + text)!
         if multimodal_indices is None:
+            # print("[Debug] All data is multimodal!")
             multimodal_indices = torch.arange(len(input_ids), dtype=torch.long, device=input_ids.device)
 
         # Handle Multimodal Indices is Empty (len == 0) --> simple unimodal forward
         elif len(multimodal_indices) == 0:
+            # print("[Debug] No multimodal data --> running unimodal LLM forward!")
             return self.llm_backbone(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -308,15 +311,45 @@ class PrismaticVLM(VLM):
             )
 
         # Run Visual Feature Extraction only if no precomputed features are provided
-        if patch_features is None:
+        # print(image_file_names)
+        # with torch.set_grad_enabled(self.vision_backbone_requires_grad):
+        #     if isinstance(pixel_values, dict):
+        #         patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
+        #     else:
+        #         patch_features = self.vision_backbone(pixel_values[multimodal_indices])
+        #     for idx in range(len(multimodal_indices)):
+        #         print(f"[Debug] Extracted patch features of shape {patch_features.shape}")
+        #         print(f"[Debug] CLEVR_train_023815.png.pt --> {patch_features[idx]}")
+        #         root_dir = "/share/data/speech/txu/vlm_semantics/data/vision_features"
+        #         torch.save(patch_features[idx], f"{root_dir}/train/CLEVR_train_023815.png.pt")
+        #         import sys; sys.exit(0)
+                
+        if patch_features is None: # During inference, assume features aren't precomputed
             with torch.set_grad_enabled(self.vision_backbone_requires_grad):
                 if isinstance(pixel_values, dict):
                     patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
                 else:
                     patch_features = self.vision_backbone(pixel_values[multimodal_indices])
+                # print(f"[Debug] Using provided pixel values {pixel_values}")
+                # print(f"[Debug] patch_features = \n{patch_features.shape}")
+                print(f"[Debug] Extracted patch features of shape {patch_features.shape}")
+                # for idx in range(len(image_file_names)):
+                #     print(f"[Debug] {image_file_names[idx]} --> {patch_features[idx]}")
+                #     root_dir = "/share/data/speech/txu/vlm_semantics/data/vision_features"
+                #     torch.save(patch_features[idx], f"{root_dir}/{image_file_names[idx]}.pt")
+            # with open("./patch_features_debug.txt", "w") as f:
+            #     f.write(str(patch_features))
+            # import sys; sys.exit(0)
+        # else:
+        #     # print(f"[Debug] Using provided patch features of shape {patch_features.shape}")
+        #     with open("./patch_features_debug.txt", "w") as f:
+        #         f.write(str(patch_features))
+        #     import sys; sys.exit(0)
 
         # Projection Logic :: [bsz, num_patches, llm_embed_dim] =>> num_patches = (2 *) (256 + 1) for ViT-L + CLS
+        print(f"[Debug] patch features shape = {patch_features.shape}")
         projected_patch_embeddings = self.projector(patch_features)
+        print(f"[Debug] projected_patch_embeddings.shape = {projected_patch_embeddings.shape}")
         projected_patch_attention_mask = None
         if attention_mask is not None:
             projected_patch_attention_mask = torch.full(
