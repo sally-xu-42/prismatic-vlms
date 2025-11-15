@@ -126,13 +126,14 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         assert (len(conversation) == 2) and ("<image>" not in conversation[-1]["value"]), "Unexpected text!"
 
         # 只tokenize答案部分，然后构建完整序列
-        prompts = {"in front of": "In this 3D scene, `in front of` means closer to the camera/viewer (smaller depth value). ",
-                   "behind": "In this 3D scene, `behind` means farther away from the camera/viewer (larger depth value). "}
-        q = conversation[0]["value"]
-        if self.identify_relation(q) in ["behind", "in front of"]: # special prompts for front and behind
-            question_part = prompts[self.identify_relation(q)] + "Question: " + q + "Answer:"
-        else:
-            question_part = "Question: " + conversation[0]["value"] + "Answer:"
+        # prompts = {"in front of": "In this 3D scene, `in front of` means closer to the camera/viewer (smaller depth value). ",
+        #            "behind": "In this 3D scene, `behind` means farther away from the camera/viewer (larger depth value). "}
+        # q = conversation[0]["value"]
+        # if self.identify_relation(q) in ["behind", "in front of"]: # special prompts for front and behind
+        #     question_part = prompts[self.identify_relation(q)] + "Question: " + q + "Answer:"
+        # else:
+        #     question_part = "Question: " + conversation[0]["value"] + "Answer:"
+        question_part = conversation[0]["value"]
         answer_part = conversation[-1]["value"] + self.tokenizer.eos_token
         # 分别tokenize
         question_ids = self.tokenizer(question_part, truncation=True, return_tensors="pt").input_ids[0]
@@ -140,29 +141,25 @@ class AlignDataset(Dataset[Dict[str, torch.Tensor]]):
         # 组合完整序列
         input_ids = torch.cat([question_ids, answer_ids])
         # 构建labels：问题部分全部mask，只学习答案部分
-        # labels = torch.cat([
-        #     torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
-        #     answer_ids  # 只学习答案部分
-        # ])
-        # mini experiment
-        labels = copy.deepcopy(input_ids)
-        labels[0] = IGNORE_INDEX
+        labels = torch.cat([
+            torch.full_like(question_ids, IGNORE_INDEX),  # mask掉整个问题部分
+            answer_ids  # 只学习答案部分
+        ])
+        # # mini experiment
+        # labels = copy.deepcopy(input_ids)
+        # labels[0] = IGNORE_INDEX
         print(f"Question: {question_part}, Answer: {conversation[-1]['value']}")
         print(f"Input IDs: {input_ids}, Labels: {labels}")
 
         # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
-        # try:
-        self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
-        print(f"Loading image features from {self.precompute_dir / image_path}.pt")
-        patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
-        print(f"patch features:\n {patch_features}")
-        pixel_values = None
-        # except Exception as e:
-        #     print(f"Error loading image features from {self.precompute_dir / image_path}.pt: {e}")
-        #     pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
-        #     patch_features = None
+        # self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+        # print(f"Loading image features from {self.precompute_dir / image_path}.pt")
+        # patch_features = torch.load(f"{self.precompute_dir / image_path}.pt")
+        # print(f"patch features:\n {patch_features}")
+        # pixel_values = None
+        pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
 
-        return dict(pixel_values=pixel_values, patch_features=patch_features, input_ids=input_ids, labels=labels)
+        return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
 
     def get_modality_lengths(self, n_image_patches: int) -> List[Tuple[bool, int]]:
         """Get a list of modalities (unimodal / text-only vs. multimodal) and length of conversations per example."""
@@ -226,6 +223,10 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
             # Phi-2 Tokenizer == CodeGenTokenizer (Fast) -- no special handling!
             elif isinstance(self.tokenizer, CodeGenTokenizerFast):
                 pass
+            
+            # txu =>> temporary workaround for other tokenizers
+            elif isinstance(self.tokenizer, PreTrainedTokenizerBase):
+                pass
 
             else:
                 raise ValueError(f"Tokenizer of type `{type(self.tokenizer)}` is not explicitly handled!")
@@ -259,19 +260,21 @@ class FinetuneDataset(Dataset[Dict[str, torch.Tensor]]):
             labels[0] = IGNORE_INDEX
 
             # Process Image --> get "pixel_values" (will either be a torch.Tensor OR a Dict[str,torch.Tensor])
-            # pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+            pixel_values = self.image_transform(Image.open(self.image_dir / image_path).convert("RGB"))
+            return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels)
             # patch_features = None
             # image_file_name = str(image_path)
             # print(f"Image file name: {image_file_name}")
             # image_path = Path("train/CLEVR_train_023815.png") # debugging purpose
-            self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
             # print(f"Loading image features from {self.precompute_dir / image_path}.pt")
-            try:
-                patch_features = torch.load(f"{self.precompute_dir / image_path}.pt", map_location="cuda")
-            except EOFError as e:
-                print(f"[DEBUG]: Caught EOFError while loading {self.precompute_dir / image_path}.pt: {e}")
-                sys.exit(0)
-            return dict(pixel_values=None, patch_features=patch_features, input_ids=input_ids, labels=labels)
+            # self.precompute_dir = Path("/scratch/txu/vision_features/vision_features") # this is a stupid mistake
+            # self.precompute_dir = Path("/share/data/speech/txu/vlm_semantics/data/vision_features")
+            # try:
+            #     patch_features = torch.load(f"{self.precompute_dir / image_path}.pt", map_location="cuda")
+            # except EOFError as e:
+            #     print(f"[DEBUG]: Caught EOFError while loading {self.precompute_dir / image_path}.pt: {e}")
+            #     sys.exit(0)
+            # return dict(pixel_values=None, patch_features=patch_features, input_ids=input_ids, labels=labels)
         else:
             # No image --> return `pixel_values` = None; Collator will do the smart batch handling for us!
             print(f"Warning: No image found for idx={idx}, returning `pixel_values=None`!")

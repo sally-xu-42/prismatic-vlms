@@ -161,7 +161,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                             attention_mask=batch["attention_mask"],
                             pixel_values=batch["pixel_values"],
                             # image_file_names=batch["image_file_names"], # ===================>> support for precomputed patch features
-                            patch_features=batch["patch_features"], # ===================>> support for precomputed patch features
+                            # patch_features=batch["patch_features"], # ===================>> support for precomputed patch features
                             labels=batch["labels"],
                             multimodal_indices=batch["multimodal_indices"],
                         )
@@ -200,7 +200,7 @@ class ResumableTrainingStrategy(TrainingStrategy):
                         # Push Metrics
                         metrics.commit(global_step=metrics.global_step + 1, lr=self.lr_scheduler.get_last_lr()[0])
                         status = metrics.push()
-                        torch.cuda.empty_cache() # ====================>> Added to reduce memory fragmentation
+                        # torch.cuda.empty_cache() # ====================>> Added to reduce memory fragmentation
 
                         # Add checkpoint saving and logging every 500 steps
                         if metrics.global_step % 500 == 0:

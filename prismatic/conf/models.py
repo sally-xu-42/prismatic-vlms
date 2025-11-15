@@ -498,6 +498,99 @@ class Instruct_7B_DINOSigLIP(Exp_7B_One_Stage):
     arch_specifier: str = "no-align+fused-gelu-mlp"
     finetune_epochs: int = 2
 
+# === Sally: Added scaling test for 500M, 1B, 3B qwens ===
+@dataclass
+class DINOSigLIP_500M(Exp_7B_One_Stage):
+    model_id: str = "dinosiglip+500m"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "qwen-3-0.6b"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOv2_500M(Exp_7B_One_Stage):
+    model_id: str = "dinov2+500m"
+    vision_backbone_id: str = "dinov2-vit-l"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "qwen-3-0.6b" 
+    # txu=>> default projector is gelu-mlp here, no fused
+    arch_specifier: str = "no-align+gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOSigLIP_1B(Exp_7B_One_Stage):
+    model_id: str = "dinosiglip+1b"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "qwen-3-1.7b"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOv2_1B(Exp_7B_One_Stage):
+    model_id: str = "dinov2+1b"
+    vision_backbone_id: str = "dinov2-vit-l"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "qwen-3-1.7b"
+    # txu=>> default projector is gelu-mlp here, no fused
+    arch_specifier: str = "no-align+gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOSigLIP_4B_Instruct(Exp_7B_One_Stage):
+    model_id: str = "dinosiglip+4b-inst"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "qwen-3-4b-inst"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 1
+
+# === Sally: Added scaling test for 500M, 1B, 3B qwens ===
+@dataclass
+class DINOSigLIP_Llama_1B(Exp_7B_One_Stage):
+    model_id: str = "dinosiglip+1b-llama"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "llama-3-1b"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOv2_Llama_1B(Exp_7B_One_Stage):
+    model_id: str = "dinov2+1b-llama"
+    vision_backbone_id: str = "dinov2-vit-l"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "llama-3-1b"
+    arch_specifier: str = "no-align+gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOSigLIP_Llama_1B_Chat(Exp_7B_One_Stage):
+    model_id: str = "dinosiglip+1b-llama-chat"
+    vision_backbone_id: str = "dinosiglip-vit-so-384px"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "llama-3-1b-chat"
+    arch_specifier: str = "no-align+fused-gelu-mlp"
+    finetune_epochs: int = 1
+
+@dataclass
+class DINOv2_Llama_1B_Chat(Exp_7B_One_Stage):
+    model_id: str = "dinov2+1b-llama-chat"
+    vision_backbone_id: str = "dinov2-vit-l"
+    image_resize_strategy: str = "resize-naive"
+    llm_backbone_id: str = "llama-3-1b-chat"
+    arch_specifier: str = "no-align+gelu-mlp"
+    finetune_epochs: int = 1
+
+# @dataclass
+# class DINOSigLIP_Llama_4B_Instruct(Exp_7B_One_Stage):
+#     model_id: str = "dinosiglip+4b-inst-llama"
+#     vision_backbone_id: str = "dinosiglip-vit-so-384px"
+#     image_resize_strategy: str = "resize-naive"
+#     llm_backbone_id: str = "qwen-3-4b-inst"
+#     arch_specifier: str = "no-align+fused-gelu-mlp"
+#     finetune_epochs: int = 1
 
 """
 My Models
@@ -601,6 +694,17 @@ class ModelRegistry(Enum):
 
     # === Added :: Instruct-tuned LM Backbones ===
     INSTRUCT_DINOSIGLIP_7B = Instruct_7B_DINOSigLIP
+
+    # === Added :: Scaled LM Backbones ===
+    DINOSIGLIP_500M = DINOSigLIP_500M
+    DINOV2_500M = DINOv2_500M
+    DINOV2_1B = DINOv2_1B
+    DINOSIGLIP_1B = DINOSigLIP_1B
+    DINOSIGLIP_4B_INSTRUCT = DINOSigLIP_4B_Instruct
+    DINOSIGLIP_LLAMA_1B = DINOSigLIP_Llama_1B
+    DINOV2_LLAMA_1B = DINOv2_Llama_1B
+    DINOSIGLIP_LLAMA_1B_CHAT = DINOSigLIP_Llama_1B_Chat
+    DINOV2_LLAMA_1B_CHAT = DINOv2_Llama_1B_Chat
 
     # === Added :: LoRA-finetuned instruct LM Backbones ===
     MY_MODEL = DINO_SigLIP_PHI3_LORA

@@ -296,7 +296,7 @@ class PrismaticVLM(VLM):
 
         # Handle Multimodal Indices is Empty (len == 0) --> simple unimodal forward
         elif len(multimodal_indices) == 0:
-            # print("[Debug] No multimodal data --> running unimodal LLM forward!")
+            print("[Debug] No multimodal data --> running unimodal LLM forward!")
             return self.llm_backbone(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -324,27 +324,23 @@ class PrismaticVLM(VLM):
         #         torch.save(patch_features[idx], f"{root_dir}/train/CLEVR_train_023815.png.pt")
         #         import sys; sys.exit(0)
                 
-        if patch_features is None: # During inference, assume features aren't precomputed
-            with torch.set_grad_enabled(self.vision_backbone_requires_grad):
-                if isinstance(pixel_values, dict):
-                    patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
-                else:
-                    patch_features = self.vision_backbone(pixel_values[multimodal_indices])
-                # print(f"[Debug] Using provided pixel values {pixel_values}")
-                # print(f"[Debug] patch_features = \n{patch_features.shape}")
-                print(f"[Debug] Extracted patch features of shape {patch_features.shape}")
-                # for idx in range(len(image_file_names)):
-                #     print(f"[Debug] {image_file_names[idx]} --> {patch_features[idx]}")
-                #     root_dir = "/share/data/speech/txu/vlm_semantics/data/vision_features"
-                #     torch.save(patch_features[idx], f"{root_dir}/{image_file_names[idx]}.pt")
-            # with open("./patch_features_debug.txt", "w") as f:
-            #     f.write(str(patch_features))
-            # import sys; sys.exit(0)
-        # else:
-        #     # print(f"[Debug] Using provided patch features of shape {patch_features.shape}")
-        #     with open("./patch_features_debug.txt", "w") as f:
-        #         f.write(str(patch_features))
-        #     import sys; sys.exit(0)
+        # if patch_features is None: # During inference, assume features aren't precomputed
+        #     with torch.set_grad_enabled(self.vision_backbone_requires_grad):
+        #         if isinstance(pixel_values, dict):
+        #             patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
+        #         else:
+        #             patch_features = self.vision_backbone(pixel_values[multimodal_indices])
+        #         print(f"[Debug] Extracted patch features of shape {patch_features.shape}")
+        #         # for idx in range(len(image_file_names)):
+        #         #     print(f"[Debug] {image_file_names[idx]} --> {patch_features[idx]}")
+        #         #     root_dir = "/share/data/speech/txu/vlm_semantics/data/vision_features"
+        #         #     torch.save(patch_features[idx], f"{root_dir}/{image_file_names[idx]}.pt")
+
+        with torch.set_grad_enabled(self.vision_backbone_requires_grad):
+            if isinstance(pixel_values, dict):
+                patch_features = self.vision_backbone({k: pixel_values[k][multimodal_indices] for k in pixel_values})
+            else:
+                patch_features = self.vision_backbone(pixel_values[multimodal_indices])
 
         # Projection Logic :: [bsz, num_patches, llm_embed_dim] =>> num_patches = (2 *) (256 + 1) for ViT-L + CLS
         print(f"[Debug] patch features shape = {patch_features.shape}")

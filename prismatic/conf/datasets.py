@@ -190,6 +190,160 @@ class CLEVRMixedConfig(DatasetConfig):
     )
     dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
 
+# ============ Basic THINGS Dataset Configurations ============
+@dataclass
+class THINGSConfig(DatasetConfig):
+    dataset_id: str = "things"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSHypConfig(DatasetConfig):
+    dataset_id: str = "things-hyp"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_hyp.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_hyp.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAndHypConfig(DatasetConfig):
+    dataset_id: str = "things+hyp"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_things+hyp.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_things+hyp.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAbl10Config(DatasetConfig):
+    dataset_id: str = "things+hyp-abl10"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_10pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_10pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAbl30Config(DatasetConfig):
+    dataset_id: str = "things+hyp-abl30"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_30pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_30pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAbl50Config(DatasetConfig):
+    dataset_id: str = "things+hyp-abl50"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_50pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_50pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAbl70Config(DatasetConfig):
+    dataset_id: str = "things+hyp-abl70"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_70pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_70pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+@dataclass
+class THINGSAbl90Config(DatasetConfig):
+    dataset_id: str = "things+hyp-abl90"
+
+    # Preprocessed THINGS dataset json file
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_90pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/preprocessed_THINGS/train_combined_ablated_90pct.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+# ============ Baseline Configurations ============
+# 1. LLaVa-v15: llava-v15
+# 2. THINGS + LLaVa-v15 (Exact same dataset as used in all public LLaVa-v15 models, but with THINGS data added in)
+@dataclass
+class THINGS_LLaVa_V15_Config(DatasetConfig):
+    dataset_id: str = "things+llava-v15"
+
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/baseline/things+llava-v15_align.json"),
+        Path("data/hypernymy_THINGS/images/"), # llava + things images are all in this directory, so we can point to it directly
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/baseline/things+llava-v15_finetune.json"),
+        Path("data/hypernymy_THINGS/images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+# 3. THINGS + THINGS-HYP + LLaVa-v15 (Exact same dataset as used in all public LLaVa-v15 models, but with THINGS data added in)
+@dataclass
+class THINGS_HYP_LLaVa_V15_Config(DatasetConfig):
+    dataset_id: str = "things+hyp+llava-v15"
+
+    align_stage_components: Tuple[Path, Path] = (
+        Path("data/baseline/things+hyp+llava-v15_align.json"),
+        Path("data/all_images/"),
+    )
+    finetune_stage_components: Tuple[Path, Path] = (
+        Path("data/baseline/things+hyp+llava-v15_finetune.json"),
+        Path("data/all_images/"),
+    )
+    dataset_root_dir: Path = Path("/share/data/speech/txu/vlm_semantics")
+
+# ============ Ablation Configurations ============
 
 # === Define a Dataset Registry Enum for Reference & Validation =>> all *new* datasets must be added here! ===
 @unique
@@ -209,6 +363,17 @@ class DatasetRegistry(Enum):
     CLEVR_FRONT_ABLATED = CLEVRFrontConfig
     CLEVR_MIXED = CLEVRMixedConfig
     CLEVR_MINI = CLEVRMiniConfig
+
+    THINGS = THINGSConfig
+    THINGS_HYP = THINGSHypConfig
+    THINGSAndHYP = THINGSAndHypConfig
+    THINGS_ABL_10 = THINGSAbl10Config
+    THINGS_ABL_30 = THINGSAbl30Config
+    THINGS_ABL_50 = THINGSAbl50Config
+    THINGS_ABL_70 = THINGSAbl70Config
+    THINGS_ABL_90 = THINGSAbl90Config
+    THINGS_LLAVA_V15 = THINGS_LLaVa_V15_Config 
+    THINGS_HYP_LLAVA_V15 = THINGS_HYP_LLaVa_V15_Config 
 
     @property
     def dataset_id(self) -> str:

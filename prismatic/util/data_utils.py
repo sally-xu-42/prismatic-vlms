@@ -28,7 +28,7 @@ class PaddedCollatorForLanguageModeling:
     def __call__(self, instances: Sequence[Dict]) -> Dict:
         input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
         pixel_values = [instance["pixel_values"] for instance in instances]
-        patch_features = [instance["patch_features"] for instance in instances]
+        # patch_features = [instance["patch_features"] for instance in instances]
         # image_file_names = [instance["image_file_name"] for instance in instances]
         # print(f"[Debug] patch_features before padding: {patch_features}")
 
@@ -47,56 +47,56 @@ class PaddedCollatorForLanguageModeling:
 
         # Some examples are "language-only" --> build a Tensor of `multimodal_indices` that we can slice into easily
         # print(f"[Debug] pixel_values before processing: {pixel_values}")
-        # multimodal_indices = torch.tensor(
-        #     [idx for idx in range(len(pixel_values)) if pixel_values[idx] is not None], dtype=torch.long
-        # )
         multimodal_indices = torch.tensor(
-            [idx for idx in range(len(patch_features)) if patch_features[idx] is not None], dtype=torch.long
+            [idx for idx in range(len(pixel_values)) if pixel_values[idx] is not None], dtype=torch.long
         )
+        # multimodal_indices = torch.tensor(
+        #     [idx for idx in range(len(patch_features)) if patch_features[idx] is not None], dtype=torch.long
+        # )
         print(f"[Debug] multimodal indices shape {multimodal_indices.shape} = \n {multimodal_indices}")
 
         # Stack all `pixel_values` --> depending on type (torch.Tensor, or Dict[str, torch.Tensor]) & presence of None
         if len(multimodal_indices) == 0:
             pixel_values = torch.stack([self.dummy_pixel_values for _ in range(len(input_ids))])
             # print(f"[Debug] pixel_values after processing (all unimodal): {pixel_values}")
-        elif isinstance(pv_example := patch_features[multimodal_indices[0]], torch.Tensor):
-            # pixel_values = torch.stack(
-            #     [
-            #         pixel_values[idx] if idx in multimodal_indices else self.dummy_pixel_values
-            #         for idx in range(len(input_ids))
-            #     ]
-            # )
-            patch_features = torch.stack(
+        elif isinstance(pv_example := pixel_values[multimodal_indices[0]], torch.Tensor):
+            pixel_values = torch.stack(
                 [
-                    patch_features[idx] if idx in multimodal_indices else torch.zeros((1,1,self.default_image_resolution[0]), dtype=self.pixel_values_dtype)
+                    pixel_values[idx] if idx in multimodal_indices else self.dummy_pixel_values
                     for idx in range(len(input_ids))
                 ]
             )
+            # patch_features = torch.stack(
+            #     [
+            #         patch_features[idx] if idx in multimodal_indices else torch.zeros((1,1,self.default_image_resolution[0]), dtype=self.pixel_values_dtype)
+            #         for idx in range(len(input_ids))
+            #     ]
+            # )
         elif isinstance(pv_example, dict):
-            # pixel_values = {
-            #     k: torch.stack(
-            #         [
-            #             pixel_values[idx][k] if idx in multimodal_indices else self.dummy_pixel_values
-            #             for idx in range(len(input_ids))
-            #         ]
-            #     )
-            #     for k in pv_example
-            # }
-            patch_features = {
+            pixel_values = {
                 k: torch.stack(
                     [
-                        patch_features[idx][k] if idx in multimodal_indices else torch.zeros((1,1,self.default_image_resolution[0]), dtype=self.pixel_values_dtype)
+                        pixel_values[idx][k] if idx in multimodal_indices else self.dummy_pixel_values
                         for idx in range(len(input_ids))
                     ]
                 )
                 for k in pv_example
             }
+            # patch_features = {
+            #     k: torch.stack(
+            #         [
+            #             patch_features[idx][k] if idx in multimodal_indices else torch.zeros((1,1,self.default_image_resolution[0]), dtype=self.pixel_values_dtype)
+            #             for idx in range(len(input_ids))
+            #         ]
+            #     )
+            #     for k in pv_example
+            # }
         else:
             raise ValueError(f"Unsupported `pixel_values` type = {type(pixel_values)}")
 
         return dict(
             pixel_values=pixel_values,
-            patch_features=patch_features, # adding support for precomputed patch features
+            # patch_features=patch_features, # adding support for precomputed patch features
             # image_file_names=image_file_names,
             input_ids=input_ids,
             attention_mask=attention_mask,

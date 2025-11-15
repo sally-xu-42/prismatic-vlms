@@ -9,7 +9,14 @@ from typing import Optional, Tuple
 
 from transformers import PreTrainedTokenizerBase
 
-from prismatic.models.backbones.llm import LLaMa2LLMBackbone, LLMBackbone, MistralLLMBackbone, PhiLLMBackbone
+from prismatic.models.backbones.llm import (
+    LLaMa2LLMBackbone, 
+    LLaMa3LLMBackbone,
+    LLMBackbone, 
+    MistralLLMBackbone, 
+    PhiLLMBackbone, 
+    Qwen3LLMBackbone,
+)
 # from prismatic.models.backbones.llm import LLaMa2LLMBackbone, LLMBackbone, MistralLLMBackbone, PhiLLMBackbone, Phi3LLMBackbone
 from prismatic.models.backbones.vision import (
     CLIPViTBackbone,
@@ -72,6 +79,15 @@ LLM_BACKBONES = {
     # === Phi-2 Backbone ===
     "phi-2-3b": {"cls": PhiLLMBackbone, "kwargs": {}},
 
+    # === Qwen-3 Backbone ===
+    "qwen-3-0.6b": {"cls": Qwen3LLMBackbone, "kwargs": {}},
+    "qwen-3-1.7b": {"cls": Qwen3LLMBackbone, "kwargs": {}},
+    "qwen-3-4b-inst": {"cls": Qwen3LLMBackbone, "kwargs": {}},
+
+    # === LLaMa-3 Backbones ===
+    "llama-3-1b": {"cls": LLaMa3LLMBackbone, "kwargs": {}},
+    "llama-3-1b-chat": {"cls": LLaMa3LLMBackbone, "kwargs": {}},
+
     #  === Phi Backbones ===
     # "phi3_base": {"cls": Phi3LLMBackbone, "kwargs": {}}, 
 }
@@ -108,7 +124,7 @@ def get_llm_backbone_and_tokenizer(
             llm_max_length=llm_max_length,
             hf_token=hf_token,
             inference_mode=inference_mode,
-            use_flash_attention_2=llm_cfg.get("use_flash_attention_2", False),
+            # use_flash_attention_2=llm_cfg.get("use_flash_attention_2", False),
             **llm_cfg["kwargs"],
         )
         tokenizer = llm_backbone.get_tokenizer()
